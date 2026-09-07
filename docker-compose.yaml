@@ -1,0 +1,44 @@
+services:
+  app-server:
+    build:
+      context: .. # folder project
+      dockerfile: Dockerfile
+    container_name: go-app
+    restart: unless-stopped
+    env_file:
+      - ./app.env
+    environment:
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PORT: 5672
+    ports:
+      - "8005:8005"
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - backend-queue
+  rabbitmq:
+    image: rabbitmq:4.3.5-management # ubuntu
+    container_name: rabbitmq_cont
+    ports: 
+      - "127.0.0.1:5672:5672" # port untuk service rabbitmq
+      - "127.0.0.1:15672:15672" # port untuk DASHBOARD rabbitmq
+    restart: unless-stopped
+    env_file:
+      - ./app.env ## acuan dari lokas docker-compose
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER} ## nama environment image resmi see Docs
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD}
+    volumes:
+      - rabbitmqdata:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - backend-queue
+
+networks:
+  backend-queue:
+    driver: bridge
