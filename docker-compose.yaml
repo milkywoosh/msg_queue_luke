@@ -1,15 +1,14 @@
 services:
   app-server:
     build:
-      context: .. # folder project
+      context: . # folder project
       dockerfile: Dockerfile
-    container_name: go-app
+    container_name: go-rbtmq
     restart: unless-stopped
     env_file:
       - ./app.env
     environment:
-      RABBITMQ_HOST: rabbitmq
-      RABBITMQ_PORT: 5672
+      RABBITMQ_DIAL: ${RABBITMQ_DIAL}
     ports:
       - "8005:8005"
     depends_on:
@@ -29,8 +28,13 @@ services:
     environment:
       RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER} ## nama environment image resmi see Docs
       RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD}
+      RABBITMQ_DIAL: ${RABBITMQ_DIAL}
+    configs:
+      - source: rabbitmq-plugins
+        target: /etc/rabbitmq/enabled_plugins
     volumes:
-      - rabbitmqdata:/var/lib/rabbitmq
+      - rabbitmq-lib:/var/lib/rabbitmq/
+      - rabbitmq-log:/var/log/rabbitmq
     healthcheck:
       test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
       interval: 5s
@@ -38,7 +42,14 @@ services:
       retries: 5
     networks:
       - backend-queue
-
+configs:
+  rabbitmq-plugins:
+    content: "[rabbitmq_management]."  
+volumes:
+  rabbitmq-lib:
+    driver: local
+  rabbitmq-log:
+    driver: local
 networks:
   backend-queue:
     driver: bridge

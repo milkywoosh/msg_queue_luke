@@ -1,5 +1,5 @@
 # ---- Build Stage ----
-FROM golang:1.26.6-bookworm AS builder
+FROM golang:1.26.8-bookworm AS builder
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
@@ -10,11 +10,11 @@ RUN apt-get update \
 WORKDIR /app
 
 # Copy go.mod & go.sum dulu biar layer cache kepakai kalau dependency gak berubah
-COPY go.mod go.sum ./
-RUN go mod download
+    COPY go.mod go.sum ./
+    RUN go mod download
 
-# cp source code
-COPY . .
+    # cp source code
+    COPY . .
 
 # Build binary statis (CGO_ENABLED=0 biar gak depend ke libc)
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
