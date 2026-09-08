@@ -5,6 +5,7 @@ import (
 	"log"
 
 	"github.com/rabbitmq/amqp091-go"
+	"msgqueue-luke.com/v2/internals/router"
 	"msgqueue-luke.com/v2/internals/utils"
 )
 
@@ -25,4 +26,16 @@ func main() {
 	}
 	defer connAmpq.Close()
 	fmt.Printf("test :%s", "message queue")
+
+	newServer, err := router.NewServer(cfg)
+	if err != nil {
+		panic(err)
+	}
+	err = newServer.Start()
+	if err != nil {
+		panic(err)
+	}
+
+	
+
 }
