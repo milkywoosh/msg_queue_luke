@@ -22,7 +22,9 @@ go mod tidy
 Create a `.env` file in the project root:
 
 ```dotenv
-RABBITMQ_DIAL=amqp://lukerbtmq:lukerbtmq123@rabbitmq:5672/
+RABBITMQ_DIAL=amqp://urdefaultuser:userpassword@rabbitmq:5672/
+
+#dont forget define this username & password in docker-compose
 ```
 
 > Use `amqp://` (or `amqps://` for TLS) followed by `user:password@host:port/vhost`.
