@@ -3,32 +3,41 @@ package router
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"log"
 	"net/http"
 	"sync"
+	"time"
 
 	"github.com/julienschmidt/httprouter"
+	"github.com/rabbitmq/amqp091-go"
 
+	"msgqueue-luke.com/v2/internals/db"
+	msgqueue "msgqueue-luke.com/v2/internals/msg_queue"
+	"msgqueue-luke.com/v2/internals/service"
 	"msgqueue-luke.com/v2/internals/utils"
 )
 
 type StoreMain struct {
-	mutex sync.Mutex
-	Key   string
-	Value string
+	mutex     sync.Mutex
+	Key       string
+	Value     string
+	UpdatedAt time.Time
 }
 
 type Server struct {
 	config     utils.Config
 	httpserver *http.Server
 	router     *httprouter.Router
-	storeTmp   *StoreMain
+	storeTmp   *db.StoreMain
+	service    *service.OrderProcess
+	ampqCh     *amqp091.Channel
 }
 
 func NewServer(
 	cfg utils.Config,
+	ampqCh *amqp091.Channel,
+	service *service.OrderProcess,
 ) (*Server, error) {
 
 	addr := fmt.Sprintf("%s:%s", cfg.Addr, cfg.Port)
@@ -38,7 +47,9 @@ func NewServer(
 		config:     cfg,
 		router:     newRouter,
 		httpserver: nil,
-		storeTmp:   &StoreMain{}, // init pertama di main, need mutex
+		storeTmp:   db.NewStoreMain(), // init pertama di main, need mutex
+		service:    service,
+		ampqCh:     ampqCh,
 	}
 
 	srv := &http.Server{
@@ -49,6 +60,7 @@ func NewServer(
 	s.httpserver = srv
 	s.AddRoute()
 	s.AddData()
+	s.GetData()
 
 	return s, nil
 }
@@ -72,16 +84,7 @@ type AddDataParams struct {
 
 func (s *Server) storeData(key, value string) error {
 
-	if s.storeTmp.Key == key {
-		return errors.New("key berikut sudah ada, tidak dapat duplikat")
-	}
-
-	s.storeTmp.mutex.Lock()
-	s.storeTmp.Key = key
-	s.storeTmp.Value = value
-	defer s.storeTmp.mutex.Unlock()
-
-	return nil
+	return s.storeTmp.Create(key, value)
 }
 
 func (s *Server) AddData() {
@@ -112,10 +115,57 @@ func (s *Server) AddData() {
 			return
 		}
 
+		err = msgqueue.PublishOrder(
+			r.Context(),
+			s.ampqCh,
+			"order.exchange",
+			"direct",
+			addDataParams.Key, // id order : says ORD001ITEM
+			"lukerbtmq",
+		)
+		if err != nil {
+			log.Printf("publish test: %s", err.Error())
+			dataResp["message"] = err.Error()
+			utils.WriteErrorResponse(
+				w,
+				http.StatusBadRequest,
+				dataResp,
+			)
+			return
+		}
+
 		dataResp["data"] = addDataParams
+		dataResp["message"] = fmt.Sprintf("order %s dalam antrian update", addDataParams.Key)
 
 		utils.WriteResponse(w, http.StatusAccepted, dataResp)
 	})
+}
+
+func (s *Server) GetData() {
+	s.router.GET("/api/v1/get-data/:key", func(w http.ResponseWriter, r *http.Request, p httprouter.Params) {
+
+		dataResp := make(map[string]any)
+
+		key := p.ByName("key")
+		data := s.storeTmp.Fetch(key)
+
+		if data == nil {
+			log.Printf("GetData data key ksoong %s", key)
+			dataResp["message"] = fmt.Sprintf("GetData data key ksoong %s", key)
+			utils.WriteErrorResponse(
+				w,
+				http.StatusBadRequest,
+				dataResp,
+			)
+			return
+		}
+
+		dataResp["data"] = data
+		utils.WriteResponse(
+			w, http.StatusOK, dataResp,
+		)
+	})
+
 }
 
 func (s *Server) Start() error {

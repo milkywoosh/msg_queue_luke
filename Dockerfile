@@ -40,3 +40,5 @@ COPY --from=builder --chown=app:app /app/server .
 USER app
 
 EXPOSE 8005
+
+CMD ["./server"]

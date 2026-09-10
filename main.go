@@ -8,20 +8,19 @@ import (
 	"github.com/rabbitmq/amqp091-go"
 	"golang.org/x/sync/errgroup"
 
+	"msgqueue-luke.com/v2/internals/db"
+	"msgqueue-luke.com/v2/internals/domain"
+	msgqueue "msgqueue-luke.com/v2/internals/msg_queue"
 	"msgqueue-luke.com/v2/internals/router"
+	"msgqueue-luke.com/v2/internals/service"
 	"msgqueue-luke.com/v2/internals/utils"
 )
 
-type StoreMain struct {
-	Key   string
-	Value string
-}
+// prefered at main goroutine
 
 func main() {
 
 	ctxBg := context.Background()
-
-
 
 	cfg, err := utils.LoadConfig("./")
 	log.Println(cfg)
@@ -39,19 +38,36 @@ func main() {
 	defer connAmpq.Close()
 	fmt.Printf("test :%s", "message queue\n")
 
-	newServer, err := router.NewServer(cfg)
+	chAmpq, err := connAmpq.Channel()
 	if err != nil {
+		log.Printf("connAmpq.Channel: %v", err)
 		panic(err)
 	}
 
-	errWaitgroup, _ := errgroup.WithContext(ctxBg)
+	excDirectSetup := domain.NewOrderQueueSetup("order.exchange", "direct", "order.create", "order.queue")
+	err = msgqueue.SetupMQ(chAmpq, excDirectSetup)
+	if err != nil {
+		log.Printf("msgqueue.SetupMQ: %v", err)
+		panic(err)
+	}
+
+	errWaitgroup, ctx := errgroup.WithContext(ctxBg)
 	if err != nil {
 		log.Printf("errWaitGroup: %v", err)
 		panic(err)
 	}
 
-	errWaitgroup.Go(func() error {
+	newDb := db.NewStoreMain()
+	newOrder := service.NewOrderProcess(newDb)
 
+	newServer, err := router.NewServer(cfg, chAmpq, newOrder)
+	if err != nil {
+		panic(err)
+	}
+
+	go msgqueue.ConsumerOrder(ctx, chAmpq, excDirectSetup.ExchangeName, excDirectSetup.QueueName, "worker-order-1", newOrder)
+
+	errWaitgroup.Go(func() error {
 		log.Printf("before start")
 		err = newServer.Start()
 		log.Printf("after start...")

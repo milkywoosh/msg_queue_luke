@@ -8,7 +8,9 @@ services:
     env_file:
       - ./app.env
     environment:
-      RABBITMQ_DIAL: ${RABBITMQ_DIAL}
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER} ## nama environment image resmi, harus pake ini
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD} ## nama environment image resmi, harus pake ini
+      RABBITMQ_DIAL: ${RABBITMQ_DIAL} ## nama environment image resmi, harus pake ini
     ports:
       - "8005:8005"
     depends_on:
@@ -20,8 +22,8 @@ services:
     image: rabbitmq:4.3.5-management # ubuntu
     container_name: rabbitmq_cont
     ports: 
-      - "127.0.0.1:5672:5672" # port untuk service rabbitmq
-      - "127.0.0.1:15672:15672" # port untuk DASHBOARD rabbitmq
+      - "5672:5672" # port untuk service rabbitmq
+      - "15672:15672" # port untuk DASHBOARD rabbitmq
     restart: unless-stopped
     env_file:
       - ./app.env ## acuan dari lokas docker-compose
