@@ -55,15 +55,16 @@ func (s *StoreMain) Update(key string) error {
 	updatedNode := &Node{
 		Key:       oldNode.Key,
 		Value:     "cussoke",
-		UpdatedAt: time.Now(), // Update timestamp di sini
+		UpdatedAt: oldNode.UpdatedAt.Add(1 * time.Hour), // Update timestamp di sini
 	}
 
 	// 4. Ganti node lama dengan yang baru secara atomic.
 	// Jika nilainya belum berubah di goroutine lain, fungsi ini sukses (return true).
-	if !s.mutexMap.CompareAndSwap(key, oldNode, updatedNode) {
-		return fmt.Errorf("gagal update compare swap")
+	if s.mutexMap.CompareAndSwap(key, oldNode, updatedNode) {
+		// return fmt.Errorf("gagal update compare swap")
+		return nil
 	}
-	return nil
+	return fmt.Errorf("gagal update compare swap")
 }
 
 func (s *StoreMain) Fetch(key string) *Node {
