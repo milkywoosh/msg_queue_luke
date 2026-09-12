@@ -1,3 +1,22 @@
 https://chatgpt.com/c/6aa17c12-4940-83ec-873c-ffe8aa5bcba8
 
 diskusi rabbitMQ
+
+// concurrent loop via bash
+messages=(
+    "asdf" "hdfghd" "qwerq" "xkzpm" "lqweoi" "zmxncb" "poiuyt"
+    "vbnmqa" "rtyuio" "lkjhgf" "mnbvcx" "qazwsx" "edcrfv" "tgbyhn"
+    "ujmikol" "plmokn" "xswedc" "rfvtgb" "yhnujm" "iklopq" "zaqwsx"
+    "cdewsx" "rfvbg" "tgbnhy" "ujmki" "olpazx" "qweasd" "zxcvbn"
+    "mkoijn" "plqwer" "asdzxc" "qwepoi" "lkjhas" "mnqwer" "xzyabc"
+    "jhgfdsa" "poiuytr" "mnbvcxz" "qazxsw" "edcvfr" "tgbymn" "ujmnhy"
+    "ikolqa" "plokmn" "zmxqwe" "asqwer" "cvbnml" "rtyghj" "qweasd"
+)
+
+for msg in "${messages[@]}"; do
+	echo "Sending: $msg"
+	go run producer.go "$msg"
+done
+
+wait
+echo "Semua proses selesai"
