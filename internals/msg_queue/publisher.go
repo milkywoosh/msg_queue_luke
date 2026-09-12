@@ -2,6 +2,8 @@ package msgqueue
 
 import (
 	"context"
+	"errors"
+	"log"
 	"time"
 
 	"github.com/rabbitmq/amqp091-go"
@@ -32,13 +34,15 @@ func PublishOrder(ctx context.Context, ch *amqp091.Channel, exchg, routingKey, o
 		return err
 	}
 
-	// confirms := ch.NotifyPublish(make(chan amqp091.Confirmation, 1))
+	confirms := ch.NotifyPublish(make(chan amqp091.Confirmation, 1))
 
-	// receiveConfimation := <-confirms
+	receiveConfimation := <-confirms
 
-	// if !receiveConfimation.Ack {
-	// 	return errors.New("message broker rejected entry")
-	// }
+	log.Printf("test jalan publish...")
+
+	if !receiveConfimation.Ack {
+		return errors.New("message broker rejected entry")
+	}
 	return nil
 
 }

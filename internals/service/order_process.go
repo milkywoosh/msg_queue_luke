@@ -3,15 +3,15 @@ package service
 import "msgqueue-luke.com/v2/internals/db"
 
 type OrderProcess struct {
-	store *db.StoreMain
+	Store *db.StoreMain
 }
 
 func NewOrderProcess(store *db.StoreMain) *OrderProcess {
 	return &OrderProcess{
-		&db.StoreMain{},
+		Store: store,
 	}
 }
 
 func (o *OrderProcess) ProcessData(key string) error {
-	return o.store.Update(key)
+	return o.Store.Update(key)
 }

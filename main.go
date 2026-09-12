@@ -4,6 +4,10 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"os"
+	"os/signal"
+	"syscall"
+	"time"
 
 	"github.com/rabbitmq/amqp091-go"
 	"golang.org/x/sync/errgroup"
@@ -21,6 +25,8 @@ import (
 func main() {
 
 	ctxBg := context.Background()
+	ctx, stop := signal.NotifyContext(ctxBg, os.Interrupt, syscall.SIGTERM)
+	defer stop()
 
 	cfg, err := utils.LoadConfig("./")
 	log.Println(cfg)
@@ -38,49 +44,63 @@ func main() {
 	defer connAmpq.Close()
 	fmt.Printf("test :%s", "message queue\n")
 
-	chAmpq, err := connAmpq.Channel()
+	chPub, err := connAmpq.Channel()
+	if err != nil {
+		log.Printf("connAmpq.Channel: %v", err)
+		panic(err)
+	}
+
+	// note sebaiknya channel Consumer untuk setup exchange, routeKey dan queue karena akan dipakai consumer
+	chCon, err := connAmpq.Channel()
 	if err != nil {
 		log.Printf("connAmpq.Channel: %v", err)
 		panic(err)
 	}
 
 	excDirectSetup := domain.NewOrderQueueSetup("order.exchange", "direct", "order.create", "order.queue")
-	err = msgqueue.SetupMQ(chAmpq, excDirectSetup)
+	err = msgqueue.SetupMQ(chCon, excDirectSetup)
 	if err != nil {
 		log.Printf("msgqueue.SetupMQ: %v", err)
 		panic(err)
 	}
 
-	errWaitgroup, ctx := errgroup.WithContext(ctxBg)
-	if err != nil {
-		log.Printf("errWaitGroup: %v", err)
-		panic(err)
-	}
+	waitGroup, ctxWg := errgroup.WithContext(ctx)
 
 	newDb := db.NewStoreMain()
 	newOrder := service.NewOrderProcess(newDb)
 
-	newServer, err := router.NewServer(cfg, chAmpq, newOrder)
+	newServer, err := router.NewServer(cfg, chPub, newOrder)
 	if err != nil {
 		panic(err)
 	}
 
-	go msgqueue.ConsumerOrder(ctx, chAmpq, excDirectSetup.ExchangeName, excDirectSetup.QueueName, "worker-order-1", newOrder)
+	waitGroup.Go(func() error {
+		return msgqueue.ConsumerOrder(ctxWg, chCon, excDirectSetup.ExchangeName, excDirectSetup.QueueName, "worker-order-1", newOrder)
+	})
 
-	errWaitgroup.Go(func() error {
+	waitGroup.Go(func() error {
 		log.Printf("before start")
-		err = newServer.Start()
+		err := newServer.Start()
 		log.Printf("after start...")
 		if err != nil {
-			log.Printf("errWaitGroup: %v", err)
+			log.Printf("waitGroup: %v", err)
 			return err
 		}
 		return nil
 	})
 
-	err = errWaitgroup.Wait()
+	waitGroup.Go(func() error {
+		<-ctx.Done() // tunggu sinyal cancel dari goroutine lain yang error
+		log.Println("shutting down http server...")
+		// harus ctx bg baru
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		return newServer.Shutdown(shutdownCtx) // asumsi router.Server punya method ini
+	})
+
+	err = waitGroup.Wait()
 	if err != nil {
-		log.Printf("errWaitGroup last tail: %v", err)
+		log.Printf("waitGroup last tail: %v", err)
 		panic(err)
 	}
 

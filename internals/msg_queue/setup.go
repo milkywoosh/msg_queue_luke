@@ -13,6 +13,13 @@ func SetupMQ(ch *amqp091.Channel, declare domain.OrderQueueSetup) error {
 	// setup queue
 	// setup binding queue
 
+	queueArgs := amqp091.Table{
+		amqp091.QueueTypeArg: amqp091.QueueTypeQuorum, // Resolves to "x-queue-type": "quorum"
+
+		// Optional: Add poison pill protection (highly recommended for quorum queues)
+		"x-delivery-limit": int32(5),
+	}
+
 	err := ch.ExchangeDeclare(
 		declare.ExchangeName,
 		declare.TypeExchange,
@@ -40,7 +47,7 @@ func SetupMQ(ch *amqp091.Channel, declare domain.OrderQueueSetup) error {
 		false,
 		false,
 		false,
-		nil,
+		queueArgs,
 	)
 	if err != nil {
 		log.Println("err queue declare: ", err)

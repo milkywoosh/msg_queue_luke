@@ -36,7 +36,7 @@ type Server struct {
 
 func NewServer(
 	cfg utils.Config,
-	ampqCh *amqp091.Channel,
+	chPub *amqp091.Channel,
 	service *service.OrderProcess,
 ) (*Server, error) {
 
@@ -47,9 +47,9 @@ func NewServer(
 		config:     cfg,
 		router:     newRouter,
 		httpserver: nil,
-		storeTmp:   db.NewStoreMain(), // init pertama di main, need mutex
+		storeTmp:   service.Store, // init pertama di main, need mutex
 		service:    service,
-		ampqCh:     ampqCh,
+		ampqCh:     chPub,
 	}
 
 	srv := &http.Server{
@@ -119,7 +119,7 @@ func (s *Server) AddData() {
 			r.Context(),
 			s.ampqCh,
 			"order.exchange",
-			"direct",
+			"order.create",
 			addDataParams.Key, // id order : says ORD001ITEM
 			"lukerbtmq",
 		)
