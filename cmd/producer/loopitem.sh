@@ -1,8 +1,5 @@
-https://chatgpt.com/c/6aa17c12-4940-83ec-873c-ffe8aa5bcba8
+#!/bin/bash
 
-diskusi rabbitMQ
-
-// concurrent loop via bash
 messages=(
    "item01" "item02" "item03" "item04" "item05"
    "item06" "item07" "item08" "item09" "item10"
@@ -23,6 +20,3 @@ done
 
 wait
 echo "Semua proses selesai"
-
-
-curl  post

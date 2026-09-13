@@ -31,11 +31,11 @@ func main() {
 	ctx, stop := signal.NotifyContext(ctxBg, os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	duration := 1 * time.Minute
+	// duration := 1 * time.Minute
 
 	// gimana propagate value in context? bring unique identifier
-	ctxTimeout, cancel := context.WithTimeout(ctxBg, 1*time.Minute)
-	defer cancel()
+	// ctxTimeout, cancel := context.WithTimeout(ctxBg, 1*time.Minute)
+	// defer cancel()
 
 	cfg, err := utils.LoadConfig("../../")
 	log.Println(cfg)
@@ -67,6 +67,9 @@ func main() {
 		panic(err)
 	}
 
+	err = chCons.Qos(1, 0, false) // 1 pesan per worker sebelum ack
+	failOnError(err, "Failed to set QoS")
+
 	msgs, err := chCons.Consume(
 		excDirectSetup.QueueName, // queue
 		"worker-newtask-1",       // consumer
@@ -81,6 +84,10 @@ func main() {
 	go func() {
 		for d := range msgs {
 			log.Printf("Received a message: %s", d.Body)
+
+			// d.Ack(true) // kalo true, di dashboard queue statusnya 0
+			d.Ack(false) // Ack khusus message yang saat ini sedang lewat, yang lain belum di Ack
+
 			dotCount := bytes.Count(d.Body, []byte("."))
 			t := time.Duration(dotCount)
 			time.Sleep(t * time.Second)
@@ -94,9 +101,5 @@ func main() {
 	case <-ctx.Done():
 		fmt.Println("context canceled")
 		return
-	case <-ctxTimeout.Done():
-		fmt.Printf("context timeout %s", duration)
-		return
 	}
-
 }
