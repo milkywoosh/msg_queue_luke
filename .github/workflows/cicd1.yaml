@@ -6,8 +6,10 @@ name: cicdv1
 # - push ke master   -> jalankan CI lagi + lanjut ke build (fase 2)
 # ============================================================
 on:
+  # baru event pull_request, belum ada push, push baru dilakukan ketika 'allow merge'
   pull_request:
     branches: [master]
+  # event 'push' ini dilakukan ketika proses 'allow merge'
   push:
     branches: [master]
 
@@ -98,7 +100,7 @@ jobs:
       - name: Setup Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.22'
+          go-version: '1.26'
           cache: true
 
       - name: Build binary Go
