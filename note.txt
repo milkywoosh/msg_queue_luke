@@ -26,3 +26,13 @@ echo "Semua proses selesai"
 
 
 curl  post
+
+run testing
+
+*test untuk semua kasih info coverage
+go test -v -cover ./...
+
+*test untuk semua kasih info yang kena race condition
+go test -v -race ./...
+
+
