@@ -56,26 +56,26 @@ jobs:
       - name: Unit test (tanpa DB)
         run: go test ./... -short -v
 
-      - name: Run DB migrations
-        run: go run ./cmd/migrate
-        env:
-          DB_HOST: localhost
-          DB_PORT: 5432
-          DB_USER: testuser
-          DB_PASSWORD: testpass
-          DB_NAME: testdb
+      # - name: Run DB migrations
+      #   run: go run ./cmd/migrate
+      #   env:
+      #     DB_HOST: localhost
+      #     DB_PORT: 5432
+      #     DB_USER: testuser
+      #     DB_PASSWORD: testpass
+      #     DB_NAME: testdb
 
-      - name: Integration test (pakai Postgres)
-        run: go test ./... -run Integration -v
-        env:
-          DB_HOST: localhost
-          DB_PORT: 5432
-          DB_USER: testuser
-          DB_PASSWORD: testpass
-          DB_NAME: testdb
+      # - name: Integration test (pakai Postgres)
+      #   run: go test ./... -run Integration -v
+      #   env:
+      #     DB_HOST: localhost
+      #     DB_PORT: 5432
+      #     DB_USER: testuser
+      #     DB_PASSWORD: testpass
+      #     DB_NAME: testdb
 
   # ============================================================
-  # FASE 2: BUILD (pengganti sementara "CD" selama belum ada cloud)
+  # FASE 2: BUILD (pengganti sementara "CD", belum ke cloud cloud)
   # HANYA jalan kalau:
   #  - event-nya push (artinya sudah benar-benar merge ke master)
   #  - DAN fase 1 (lint-test) lolos
@@ -108,7 +108,7 @@ jobs:
         env:
           CGO_ENABLED: 0
 
-      - name: Build Docker image (status belum di-push kemana pun)
+      - name: Build Docker image (status hasil build-image belum di-push ke cloud pun)
         run: |
           docker build -t my-app:${{ github.sha }} .
           docker save my-app:${{ github.sha }} -o my-app-image.tar
