@@ -1,30 +1,27 @@
-name: cicdv1-go-rbtmq
+name: cicdv1
 
+# ============================================================
+# FASE 0: TRIGGER
+# - pull_request  -> jalankan CI (fase 1) sebagai syarat merge
+# - push ke master   -> jalankan CI lagi + lanjut ke build (fase 2)
+# ============================================================
 on:
   pull_request:
     branches: [master]
   push:
     branches: [master]
-  workflow_dispatch:
-    inputs:
-      rollback_to_task_def:
-        description: "Task definition revision untuk rollback (kosongkan jika bukan rollback)"
-        required: false
-        type: string
-
-permissions:
-  id-token: write
-  contents: read
 
 jobs:
-  # ==========================================================
-  # JOB 1: CI - jalan di PR maupun push ke master
-  # Ini gerbang wajib lolos sebelum PR bisa di-merge
-  # (aktifkan sebagai "required status check" di Branch Protection)
-  # ==========================================================
+  # ============================================================
+  # FASE 1: CI (Continuous Integration)
+  # Jalan di PR maupun push ke master.
+  # Ini yang jadi "gerbang" wajib lolos sebelum boleh merge
+  # (aktifkan di Settings > Branches > Require status checks:
+  #  pilih job "lint-test" sebagai required check)
+  # ============================================================
   lint-test:
-    name: Lint & Test
-    runs-on: ubuntu-latest
+    name: "Fase 1 - Lint & Test"
+    runs-on: ubuntu-24.04
     services:
       postgres:
         image: postgres:16
@@ -47,7 +44,7 @@ jobs:
       - name: Setup Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.26'
+          go-version: '1.26.7'
           cache: true
 
       - name: Lint (gofmt & go vet)
@@ -56,7 +53,7 @@ jobs:
           test ! -s /tmp/gofmt.out
           go vet ./...
 
-      - name: Unit test
+      - name: Unit test (tanpa DB)
         run: go test ./... -short -v
 
       - name: Run DB migrations
@@ -68,7 +65,7 @@ jobs:
           DB_PASSWORD: testpass
           DB_NAME: testdb
 
-      - name: Integration test
+      - name: Integration test (pakai Postgres)
         run: go test ./... -run Integration -v
         env:
           DB_HOST: localhost
@@ -77,117 +74,61 @@ jobs:
           DB_PASSWORD: testpass
           DB_NAME: testdb
 
-  # ==========================================================
-  # JOB 2: CD - HANYA jalan setelah merge ke master
-  # (event push, bukan pull_request) dan HANYA jika lint-test lolos
-  # ==========================================================
-  build-deploy:
-    name: Build, Push & Deploy
+  # ============================================================
+  # FASE 2: BUILD (pengganti sementara "CD" selama belum ada cloud)
+  # HANYA jalan kalau:
+  #  - event-nya push (artinya sudah benar-benar merge ke master)
+  #  - DAN fase 1 (lint-test) lolos
+  #
+  # Output-nya: Docker image + binary Go, tersimpan sebagai
+  # artifact di GitHub Actions (bisa didownload manual).
+  # Nanti ke cloud, tinggal tambah fase 3 (push ke
+  # registry) dan fase 4 (deploy) — struktur job ini tidak berubah,
+  # tinggal disambung.
+  # ============================================================
+  build:
+    name: "Fase 2 - Build App (Ubuntu 24)"
     needs: lint-test
     if: github.event_name == 'push' && github.ref == 'refs/heads/master'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4
+      - name: Setup Go
+        uses: actions/setup-go@v5
         with:
-          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
-          aws-region: ${{ secrets.AWS_REGION }}
+          go-version: '1.22'
+          cache: true
 
-      - name: Login to ECR
-        id: ecr-login
-        uses: aws-actions/amazon-ecr-login@v2
-
-      - name: Build & push Docker image
-        id: build-image
+      - name: Build binary Go
+        run: |
+          mkdir -p dist
+          CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o dist/app ./cmd/server
         env:
-          ECR_REGISTRY: ${{ steps.ecr-login.outputs.registry }}
-          ECR_REPOSITORY: ${{ secrets.ECR_REPOSITORY }}
-          IMAGE_TAG: ${{ github.sha }}
+          CGO_ENABLED: 0
+
+      - name: Build Docker image (status belum di-push kemana pun)
         run: |
-          docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG .
-          docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
-          echo "image=$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" >> "$GITHUB_OUTPUT"
+          docker build -t my-app:${{ github.sha }} .
+          docker save my-app:${{ github.sha }} -o my-app-image.tar
 
-      - name: Render new ECS task definition
-        id: task-def
-        uses: aws-actions/amazon-ecs-render-task-definition@v1
+      - name: Upload binary sebagai artifact
+        uses: actions/upload-artifact@v4
         with:
-          task-definition: ecs-task-def.json
-          container-name: my-app-container
-          image: ${{ steps.build-image.outputs.image }}
+          name: app-binary
+          path: dist/app
+          retention-days: 7
 
-      - name: Deploy to ECS
-        uses: aws-actions/amazon-ecs-deploy-task-definition@v2
+      - name: Upload Docker image sebagai artifact
+        uses: actions/upload-artifact@v4
         with:
-          task-definition: ${{ steps.task-def.outputs.task-definition }}
-          service: my-service
-          cluster: my-cluster
-          wait-for-service-stability: true
+          name: docker-image
+          path: my-app-image.tar
+          retention-days: 7
 
-      - name: Smoke test / health check
-        id: healthcheck
+      - name: Ringkasan build
         run: |
-          for i in {1..5}; do
-            STATUS=$(curl -s -o /dev/null -w "%{http_code}" https://api.example.com/health)
-            if [ "$STATUS" == "200" ]; then
-              echo "Health check OK"
-              exit 0
-            fi
-            echo "Health check gagal (status $STATUS), retry $i..."
-            sleep 10
-          done
-          echo "Health check gagal total"
-          exit 1
-
-  # ==========================================================
-  # JOB 3 (opsional): Auto-rollback jika smoke test gagal
-  # ==========================================================
-  rollback:
-    name: Rollback ke task definition sebelumnya
-    needs: build-deploy
-    if: failure() && needs.build-deploy.result == 'failure'
-    runs-on: ubuntu-latest
-    steps:
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
-          aws-region: ${{ secrets.AWS_REGION }}
-
-      - name: Rollback service ke revision sebelumnya
-        run: |
-          PREV_TASK_DEF=$(aws ecs describe-services \
-            --cluster my-cluster \
-            --services my-service \
-            --query "services[0].deployments[?status=='ACTIVE'].taskDefinition" \
-            --output text)
-          echo "Rollback ke: $PREV_TASK_DEF"
-          aws ecs update-service \
-            --cluster my-cluster \
-            --service my-service \
-            --task-definition "$PREV_TASK_DEF"
-
-  # ==========================================================
-  # JOB 4 (opsional): Manual rollback via workflow_dispatch
-  # Jalankan manual dari tab Actions, isi input rollback_to_task_def
-  # ==========================================================
-  manual-rollback:
-    name: Manual Rollback
-    if: github.event_name == 'workflow_dispatch' && github.event.inputs.rollback_to_task_def != ''
-    runs-on: ubuntu-latest
-    steps:
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
-          aws-region: ${{ secrets.AWS_REGION }}
-
-      - name: Rollback ke task definition tertentu
-        run: |
-          aws ecs update-service \
-            --cluster my-cluster \
-            --service my-service \
-            --task-definition "${{ github.event.inputs.rollback_to_task_def }}"
+          echo "Build sukses untuk commit ${{ github.sha }}"
+          echo "Binary & Docker image tersedia di tab Artifacts run ini."
+          echo "Siap dilanjutkan ke fase deploy (AWS/GCP/VPS/dsb) nanti."
