@@ -7,6 +7,7 @@ name: cicdv1
 # ============================================================
 on:
   # baru event pull_request, belum ada push, push baru dilakukan ketika 'allow merge'
+  # ketika setelah merge pertama ada push lagi dari branch cicd atau non-branch master, maka akan running CI lagi
   pull_request:
     branches: [master]
   # event 'push' ini dilakukan ketika proses 'allow merge'
@@ -106,7 +107,7 @@ jobs:
       - name: Build binary Go
         run: |
           mkdir -p dist
-          CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o dist/app ./cmd/server
+          CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o dist/app .
         env:
           CGO_ENABLED: 0
 
