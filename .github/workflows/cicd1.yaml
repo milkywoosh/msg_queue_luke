@@ -42,6 +42,7 @@ jobs:
 
     steps:
       - name: entry Run Makefile for automate scripts shell
+        working-directory: ./
         run: make entry
       - name: Checkout code
         uses: actions/checkout@v4
@@ -52,6 +53,7 @@ jobs:
           go-version: '1.26.7'
           cache: true  
       - name: getin Run Makefile for automate scripts shell
+        working-directory: ./
         run: make getin
         
       - name: Lint (gofmt & go vet)
