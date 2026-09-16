@@ -41,11 +41,12 @@ jobs:
           --health-retries=5
 
     steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
       - name: entry Run Makefile for automate scripts shell
         working-directory: ./
         run: make entry
-      - name: Checkout code
-        uses: actions/checkout@v4
       
       
       - name: Setup Go
