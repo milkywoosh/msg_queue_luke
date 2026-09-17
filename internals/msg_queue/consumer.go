@@ -8,7 +8,7 @@ import (
 )
 
 type MessageProcessor interface {
-	ProcessData(key string) error
+	ProcessData(string, string) error
 }
 
 // jgn return error check via log aja dulu
@@ -32,7 +32,7 @@ func ConsumerOrder(ctx context.Context, ch *amqp091.Channel, exchg, queue string
 	for msg := range chConsumer {
 		log.Printf("received msg: %s", string(msg.Body))
 
-		err := event.ProcessData(string(msg.Body))
+		err := event.ProcessData(string(msg.Body), string(msg.Body))
 		if err != nil {
 			log.Printf("failed to process message: %v | body: %s", err, string(msg.Body))
 
