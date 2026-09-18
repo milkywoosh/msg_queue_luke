@@ -115,7 +115,7 @@ func (s *Server) AddData() {
 			return
 		}
 
-		err = msgqueue.PublishOrder(
+		errCreatePub := msgqueue.PublishOrder(
 			r.Context(),
 			s.ampqCh,
 			"order.exchange",
@@ -123,15 +123,34 @@ func (s *Server) AddData() {
 			addDataParams.Key, // id order : says ORD001ITEM
 			"lukerbtmq",
 		)
-		if err != nil {
-			log.Printf("publish test: %s", err.Error())
-			dataResp["message"] = err.Error()
-			utils.WriteErrorResponse(
-				w,
-				http.StatusBadRequest,
-				dataResp,
+		if errCreatePub != nil {
+			log.Printf("publish test: %s", errCreatePub.Error())
+
+			// note: prob need to send to error log info, no stoper
+
+			// service.recordLog(identifier, errMessage)
+
+			// dataResp["message"] = err.Error()
+			// utils.WriteErrorResponse(
+			// 	w,
+			// 	http.StatusBadRequest,
+			// 	dataResp,
+			// )
+			// return
+		}
+
+		if errCreatePub == nil {
+			errNotifEmail := msgqueue.PublishOrder(
+				r.Context(),
+				s.ampqCh,
+				"order.exchange",
+				"order.notif.email",
+				addDataParams.Key, // id order : says ORD001ITEM
+				"lukerbtmq",
 			)
-			return
+			if errNotifEmail != nil {
+				log.Printf("publish email: %s", errNotifEmail.Error())
+			}
 		}
 
 		dataResp["data"] = addDataParams

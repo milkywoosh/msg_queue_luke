@@ -90,6 +90,8 @@ func main() {
 
 			dotCount := bytes.Count(d.Body, []byte("."))
 			t := time.Duration(dotCount)
+
+			
 			time.Sleep(t * time.Second)
 			log.Printf("Done")
 		}
