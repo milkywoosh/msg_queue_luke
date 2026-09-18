@@ -57,8 +57,15 @@ func main() {
 		panic(err)
 	}
 
-	excDirectSetup := domain.NewOrderQueueSetup("order.exchange", "direct", "order.create", "order.queue")
-	err = msgqueue.SetupMQ(chCon, excDirectSetup)
+	excDirectSetupOrderStore := domain.NewOrderQueueSetup("order.exchange", "direct", "order.create", "order.store")
+	err = msgqueue.SetupMQ(chCon, excDirectSetupOrderStore)
+	if err != nil {
+		log.Printf("msgqueue.SetupMQ: %v", err)
+		panic(err)
+	}
+
+	excDirectSetupNotifEmail := domain.NewOrderQueueSetup("order.exchange", "direct", "order.notif.email", "email")
+	err = msgqueue.SetupMQ(chCon, excDirectSetupNotifEmail)
 	if err != nil {
 		log.Printf("msgqueue.SetupMQ: %v", err)
 		panic(err)
@@ -67,7 +74,8 @@ func main() {
 	waitGroup, ctxWg := errgroup.WithContext(ctx)
 
 	newDb := db.NewStoreMain()
-	newOrder := service.NewOrderProcess(newDb)
+	newNotifEmail := utils.NewNotifEmail() // create pointer
+	newOrder := service.NewOrderProcess(newDb, newNotifEmail)
 
 	newServer, err := router.NewServer(cfg, chPub, newOrder)
 	if err != nil {
@@ -75,7 +83,11 @@ func main() {
 	}
 
 	waitGroup.Go(func() error {
-		return msgqueue.ConsumerOrder(ctxWg, chCon, excDirectSetup.ExchangeName, excDirectSetup.QueueName, "worker-order-1", newOrder)
+		return msgqueue.ConsumerOrder(ctxWg, chCon, excDirectSetupOrderStore.ExchangeName, excDirectSetupOrderStore.QueueName, "worker-order-1", newOrder)
+	})
+
+	waitGroup.Go(func() error {
+		return msgqueue.ConsumerOrder(ctxWg, chCon, excDirectSetupNotifEmail.ExchangeName, excDirectSetupNotifEmail.QueueName, "worker-order-2", newOrder)
 	})
 
 	waitGroup.Go(func() error {
@@ -90,7 +102,9 @@ func main() {
 	})
 
 	waitGroup.Go(func() error {
-		<-ctx.Done() // tunggu sinyal cancel dari goroutine lain yang error
+		<-ctx.Done()
+
+		// <-ctx.Done() // tunggu sinyal cancel dari goroutine lain yang error
 		log.Println("shutting down http server...")
 		// harus ctx bg baru
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -100,8 +114,9 @@ func main() {
 
 	err = waitGroup.Wait()
 	if err != nil {
-		log.Printf("waitGroup last tail: %v", err)
-		panic(err)
+		// normally, log fatal untuk close all service. Tpi harus setelah service shutdown
+		log.Fatalf("waitGroup last tail: %v", err)
+
 	}
 
 }
