@@ -12,13 +12,19 @@ type MessageProcessor interface {
 }
 
 // jgn return error check via log aja dulu
-func ConsumerOrder(ctx context.Context, ch *amqp091.Channel, exchg, queue string, worker string, event MessageProcessor) error {
+func ConsumerOrder(ctx context.Context, conn *amqp091.Connection, exchg, queue string, worker string, event MessageProcessor) error {
 
-	chConsumer, err := ch.ConsumeWithContext(
+	ch, err := conn.Channel()
+	if err != nil {
+		return err
+	}
+	defer ch.Close()
+
+	delivConsumer, err := ch.ConsumeWithContext(
 		ctx,
 		queue,
 		worker, // worker as consumer, yang akan menerima dari QUEUE, misal [order-worker-1, order-worker-2, order-worker-3]
-		false,  // autoAck, after consume dianggap delivered aja pkoknya. Bisa ilang klo server crash
+		false,  // autoAck=true, after consume dianggap delivered aja pkoknya. Bisa ilang klo server crash
 		false,
 		false,
 		false,
@@ -29,7 +35,7 @@ func ConsumerOrder(ctx context.Context, ch *amqp091.Channel, exchg, queue string
 		return err
 	}
 
-	for msg := range chConsumer {
+	for msg := range delivConsumer {
 		log.Printf("received msg: %s", string(msg.Body))
 
 		err := event.ProcessData(string(msg.Body), string(msg.Body))

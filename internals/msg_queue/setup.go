@@ -7,13 +7,21 @@ import (
 	"msgqueue-luke.com/v2/internals/domain"
 )
 
-func SetupMQ(ch *amqp091.Channel, declare domain.OrderQueueSetup) error {
+func SetupMQ(conn *amqp091.Connection, declare domain.OrderQueueSetup) error {
 
 	// setup exchange
 	// setup queue
 	// setup binding queue
 
-	err := ch.ExchangeDeclare(
+	// note: cukup pake 1 channel aja untuk declare, lifecycle channel ends up after semua declaration is done
+	ch, err := conn.Channel()
+	if err != nil {
+		return err
+	}
+
+	defer ch.Close()
+
+	err = ch.ExchangeDeclare(
 		declare.ExchangeName,
 		declare.TypeExchange,
 		true,

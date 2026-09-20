@@ -11,5 +11,10 @@ func NewNotifEmail() *NotifEmail {
 }
 
 func (e *NotifEmail) SendEmail(message string) {
-	log.Printf("send email msg: %s", message)
+	log.Printf("send email msg key: %s", message)
+}
+
+func (e *NotifEmail) ProcessData(key, newval string) error {
+	e.SendEmail(key)
+	return nil
 }

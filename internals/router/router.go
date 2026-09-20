@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"github.com/julienschmidt/httprouter"
-	"github.com/rabbitmq/amqp091-go"
 
 	"msgqueue-luke.com/v2/internals/db"
 	msgqueue "msgqueue-luke.com/v2/internals/msg_queue"
@@ -31,12 +30,14 @@ type Server struct {
 	router     *httprouter.Router
 	storeTmp   *db.StoreMain
 	service    *service.OrderProcess
-	ampqCh     *amqp091.Channel
+	pub     	*msgqueue.PublisherChan
+	mu         sync.Mutex
+	email      *utils.Config
 }
 
 func NewServer(
 	cfg utils.Config,
-	chPub *amqp091.Channel,
+	pub *msgqueue.PublisherChan,
 	service *service.OrderProcess,
 ) (*Server, error) {
 
@@ -49,7 +50,7 @@ func NewServer(
 		httpserver: nil,
 		storeTmp:   service.Store, // init pertama di main, need mutex
 		service:    service,
-		ampqCh:     chPub,
+		pub:     pub,
 	}
 
 	srv := &http.Server{
@@ -115,9 +116,11 @@ func (s *Server) AddData() {
 			return
 		}
 
+		ch := s.pub.GetCh()
+
 		errCreatePub := msgqueue.PublishOrder(
 			r.Context(),
-			s.ampqCh,
+			ch,
 			"order.exchange",
 			"order.create",
 			addDataParams.Key, // id order : says ORD001ITEM
@@ -142,7 +145,7 @@ func (s *Server) AddData() {
 		if errCreatePub == nil {
 			errNotifEmail := msgqueue.PublishOrder(
 				r.Context(),
-				s.ampqCh,
+				ch,
 				"order.exchange",
 				"order.notif.email",
 				addDataParams.Key, // id order : says ORD001ITEM

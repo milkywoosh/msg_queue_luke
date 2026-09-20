@@ -44,28 +44,23 @@ func main() {
 	defer connAmpq.Close()
 	fmt.Printf("test :%s", "message queue\n")
 
-	chPub, err := connAmpq.Channel()
+	pubChan, err := msgqueue.NewPubChan(connAmpq)
 	if err != nil {
-		log.Printf("connAmpq.Channel: %v", err)
-		panic(err)
+		log.Fatalf("err NewPubChan: %s", err.Error())
 	}
 
-	// note sebaiknya channel Consumer untuk setup exchange, routeKey dan queue karena akan dipakai consumer
-	chCon, err := connAmpq.Channel()
-	if err != nil {
-		log.Printf("connAmpq.Channel: %v", err)
-		panic(err)
-	}
+	// note sebaiknya channel Consumer di-define di scope function each consumer agar create CHAN berbeda dari 1 connection awal
+	//  untuk setup exchange, routeKey dan queue karena akan dipakai consumer
 
 	excDirectSetupOrderStore := domain.NewOrderQueueSetup("order.exchange", "direct", "order.create", "order.store")
-	err = msgqueue.SetupMQ(chCon, excDirectSetupOrderStore)
+	err = msgqueue.SetupMQ(connAmpq, excDirectSetupOrderStore)
 	if err != nil {
 		log.Printf("msgqueue.SetupMQ: %v", err)
 		panic(err)
 	}
 
 	excDirectSetupNotifEmail := domain.NewOrderQueueSetup("order.exchange", "direct", "order.notif.email", "email")
-	err = msgqueue.SetupMQ(chCon, excDirectSetupNotifEmail)
+	err = msgqueue.SetupMQ(connAmpq, excDirectSetupNotifEmail)
 	if err != nil {
 		log.Printf("msgqueue.SetupMQ: %v", err)
 		panic(err)
@@ -75,19 +70,19 @@ func main() {
 
 	newDb := db.NewStoreMain()
 	newNotifEmail := utils.NewNotifEmail() // create pointer
-	newOrder := service.NewOrderProcess(newDb, newNotifEmail)
+	newOrder := service.NewOrderProcess(newDb)
 
-	newServer, err := router.NewServer(cfg, chPub, newOrder)
+	newServer, err := router.NewServer(cfg, pubChan, newOrder)
 	if err != nil {
 		panic(err)
 	}
 
 	waitGroup.Go(func() error {
-		return msgqueue.ConsumerOrder(ctxWg, chCon, excDirectSetupOrderStore.ExchangeName, excDirectSetupOrderStore.QueueName, "worker-order-1", newOrder)
+		return msgqueue.ConsumerOrder(ctxWg, connAmpq, excDirectSetupOrderStore.ExchangeName, excDirectSetupOrderStore.QueueName, "worker-order-1", newOrder)
 	})
 
 	waitGroup.Go(func() error {
-		return msgqueue.ConsumerOrder(ctxWg, chCon, excDirectSetupNotifEmail.ExchangeName, excDirectSetupNotifEmail.QueueName, "worker-order-2", newOrder)
+		return msgqueue.ConsumerOrder(ctxWg, connAmpq, excDirectSetupNotifEmail.ExchangeName, excDirectSetupNotifEmail.QueueName, "worker-order-2", newNotifEmail)
 	})
 
 	waitGroup.Go(func() error {
@@ -106,8 +101,12 @@ func main() {
 
 		// <-ctx.Done() // tunggu sinyal cancel dari goroutine lain yang error
 		log.Println("shutting down http server...")
+
 		// harus ctx bg baru
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+
+		defer pubChan.Close()
+
 		defer cancel()
 		return newServer.Shutdown(shutdownCtx) // asumsi router.Server punya method ini
 	})
