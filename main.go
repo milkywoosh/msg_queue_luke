@@ -17,6 +17,7 @@ import (
 	msgqueue "msgqueue-luke.com/v2/internals/msg_queue"
 	"msgqueue-luke.com/v2/internals/router"
 	"msgqueue-luke.com/v2/internals/service"
+	"msgqueue-luke.com/v2/internals/storage"
 	"msgqueue-luke.com/v2/internals/utils"
 )
 
@@ -71,8 +72,17 @@ func main() {
 	newDb := db.NewStoreMain()
 	newNotifEmail := utils.NewNotifEmail() // create pointer
 	newOrder := service.NewOrderProcess(newDb)
+	newS3Client, err := storage.NewClient(ctx, cfg.AccessKeyS3, cfg.SecretKeyS3, cfg.AddressS3)
+	if err != nil {
+		log.Fatal(err)
+	}
 
-	newServer, err := router.NewServer(cfg, pubChan, newOrder)
+	const bucket = "uploads"
+	if err := storage.EnsureBucket(ctx, newS3Client, bucket); err != nil {
+		log.Fatal(err)
+	}
+
+	newServer, err := router.NewServer(cfg, pubChan, newOrder, newS3Client)
 	if err != nil {
 		panic(err)
 	}

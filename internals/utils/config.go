@@ -26,6 +26,9 @@ type Config struct {
 	EmailSenderPassword  string        `mapstructure:"EMAIL_SENDER_PASSWORD"`
 	Port                 string        `mapstructure:"PORT"`
 	Addr                 string        `mapstructure:"ADDR"`
+	AccessKeyS3          string        `mapstructure:"ACCESS_KEY_S3"`
+	SecretKeyS3          string        `mapstructure:"SECRET_KEY_S3"`
+	AddressS3            string        `mapstructure:"ENDPOINT_S3"`
 }
 
 func LoadConfig(path string) (config Config, err error) {
@@ -41,6 +44,7 @@ func LoadConfig(path string) (config Config, err error) {
 		"TOKEN_SYMMETRIC_KEY", "ACCESS_TOKEN_DURATION_INMINUTE", "REFRESH_TOKEN_DURATION",
 		"EMAIL_SENDER_NAME", "EMAIL_SENDER_ADDRESS", "EMAIL_SENDER_PASSWORD",
 		"PORT", "ADDR", "RABBITMQ_USER", "RABBITMQ_PASSWORD", "RABBITMQ_DIAL",
+		"ACCESS_KEY_S3", "SECRET_KEY_S3", "ENDPOINT_S3",
 	}
 	for _, f := range fields {
 		viper.BindEnv(f)
