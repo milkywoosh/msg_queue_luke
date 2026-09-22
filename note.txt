@@ -43,6 +43,7 @@ cmd: aws --endpoint-url http://localhost:8333 s3 ls s3://uploads<bucker-name>
 
 cmd: aws --endpoint-url http://localhost:8333 s3 ls s3://uploads --recursive
 
+cmd: aws --endpoint-url http://localhost:8333 s3 ls s3://scmt --recursive
 
 donwload langsung
 cmd: aws --endpoint-url http://localhost:8333 \

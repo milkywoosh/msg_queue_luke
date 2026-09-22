@@ -72,17 +72,25 @@ func main() {
 	newDb := db.NewStoreMain()
 	newNotifEmail := utils.NewNotifEmail() // create pointer
 	newOrder := service.NewOrderProcess(newDb)
-	newS3Client, err := storage.NewClient(ctx, cfg.AccessKeyS3, cfg.SecretKeyS3, cfg.AddressS3)
+
+	// newS3Client, err := storage.NewClient(ctx, cfg.AccessKeyS3, cfg.SecretKeyS3, cfg.AddressS3)
+	// if err != nil {
+	// 	log.Fatal(err)
+	// }
+
+	newClientS3, err := storage.NewClientObjectS3(ctx, cfg.AccessKeyS3, cfg.SecretKeyS3, cfg.AddressS3)
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	const bucket = "parent-dir"
-	if err := storage.EnsureBucket(ctx, newS3Client, bucket); err != nil {
+	objectStorage := storage.NewSeaweedS3(newClientS3)
+
+	const bucket = "scmt"
+	if err := objectStorage.EnsureBucket(ctx, bucket); err != nil {
 		log.Fatal(err)
 	}
 
-	newServer, err := router.NewServer(cfg, pubChan, newOrder, newS3Client)
+	newServer, err := router.NewServer(cfg, pubChan, newOrder, objectStorage)
 	if err != nil {
 		panic(err)
 	}

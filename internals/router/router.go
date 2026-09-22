@@ -11,14 +11,14 @@ import (
 	"sync"
 	"time"
 
+	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/google/uuid"
 	"github.com/julienschmidt/httprouter"
 
-	"github.com/aws/aws-sdk-go-v2/aws"
-	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"msgqueue-luke.com/v2/internals/db"
 	msgqueue "msgqueue-luke.com/v2/internals/msg_queue"
 	"msgqueue-luke.com/v2/internals/service"
+	"msgqueue-luke.com/v2/internals/storage"
 	"msgqueue-luke.com/v2/internals/utils"
 )
 
@@ -38,14 +38,14 @@ type Server struct {
 	pub        *msgqueue.PublisherChan
 	mu         sync.Mutex
 	email      *utils.Config
-	s3Client   *s3.Client
+	s3Client   storage.ObjectS3
 }
 
 func NewServer(
 	cfg utils.Config,
 	pub *msgqueue.PublisherChan,
 	service *service.OrderProcess,
-	s3 *s3.Client,
+	s3Client storage.ObjectS3,
 ) (*Server, error) {
 
 	addr := fmt.Sprintf("%s:%s", cfg.Addr, cfg.Port)
@@ -58,7 +58,7 @@ func NewServer(
 		storeTmp:   service.Store, // init pertama di main, need mutex
 		service:    service,
 		pub:        pub,
-		s3Client:   s3,
+		s3Client:   s3Client,
 	}
 
 	srv := &http.Server{
@@ -226,6 +226,13 @@ func (s *Server) UploadStream() {
 	s.router.POST("/api/v1/upload-csv", func(w http.ResponseWriter, r *http.Request, p httprouter.Params) {
 
 		ctx := r.Context()
+		// nanti dapet dari token
+		tokenInfo := struct {
+			Bucket, Location string
+		}{
+			"scmt", "PGC001",
+		}
+
 		dataResp := make(map[string]any)
 
 		// err := r.ParseMultipartForm(10 << 20) // max 10Mb
@@ -267,12 +274,13 @@ func (s *Server) UploadStream() {
 			return
 		}
 
-		_, err = s.s3Client.PutObject(ctx, &s3.PutObjectInput{
-			Bucket: aws.String("uploads"), // ?? uploads berdasarkan apa?
-			Key:    aws.String(fmt.Sprintf("docs/%s", fileName)),
-			Body:   file, // multipart.File type
-			// Body:   strings.NewReader("halo dari S3 lokal"),
-		})
+		_, err = s.s3Client.PutObject(
+			ctx,
+			tokenInfo.Bucket,
+			tokenInfo.Location,
+			fileName,
+			file,
+		)
 
 		if err != nil {
 			dataResp["message"] = err.Error()
@@ -311,6 +319,12 @@ func (s *Server) UploadStreamAsync() {
 	s.router.POST("/api/v1/upload-csv/async", func(w http.ResponseWriter, r *http.Request, p httprouter.Params) {
 
 		ctx := r.Context()
+		// nanti dapet dari token
+		tokenInfo := struct {
+			Bucket, Location string
+		}{
+			"scmt", "PGC001",
+		}
 		dataResp := make(map[string]any)
 
 		// err := r.ParseMultipartForm(10 << 20) // max 10Mb
@@ -352,12 +366,13 @@ func (s *Server) UploadStreamAsync() {
 			return
 		}
 
-		_, err = s.s3Client.PutObject(ctx, &s3.PutObjectInput{
-			Bucket: aws.String("uploads"), // ?? uploads berdasarkan apa?
-			Key:    aws.String(fmt.Sprintf("docs/%s", fileName)),
-			Body:   file, // multipart.File type
-			// Body:   strings.NewReader("halo dari S3 lokal"),
-		})
+		_, err = s.s3Client.PutObject(
+			ctx,
+			tokenInfo.Bucket,
+			tokenInfo.Location,
+			fileName,
+			file,
+		)
 
 		if err != nil {
 			dataResp["message"] = err.Error()
@@ -381,7 +396,6 @@ func (s *Server) UploadStreamAsync() {
 type PresignedParams struct {
 	CsvFileName string `json:"file_name"`
 	ContentType string `json:"content_type"`
-	BucketName  string `json:"bucket_name"`
 }
 
 func (s *Server) GeneratePresignedURL() {
@@ -389,6 +403,12 @@ func (s *Server) GeneratePresignedURL() {
 	s.router.POST("/api/v1/presigned-url", func(w http.ResponseWriter, r *http.Request, p httprouter.Params) {
 
 		ctx := r.Context()
+		tokenInfo := struct {
+			Bucket, SubDir string
+		}{
+			"scmt", "PGC001",
+		}
+
 		dataResp := make(map[string]any)
 		var reqBody PresignedParams
 
@@ -400,26 +420,20 @@ func (s *Server) GeneratePresignedURL() {
 		}
 
 		// directory where file stored at S3
-		objectKey := fmt.Sprintf(
-			"%s/%s",
-			uuid.NewString(),
-			reqBody.CsvFileName,
-		)
+		// subdir/key-unique/csvFileName
 
-		// implement io.Reader
-
-		input := &s3.PutObjectInput{
-			Bucket:      aws.String(reqBody.BucketName),
-			Key:         aws.String(objectKey),
-			ContentType: aws.String(reqBody.ContentType),
+		var optFns []func(*s3.PresignOptions) = []func(*s3.PresignOptions){
+			s3.WithPresignExpires(10 * time.Minute),
 		}
 
-		presignClient := s3.NewPresignClient(s.s3Client)
-
-		preSignedHttp, err := presignClient.PresignPutObject(
+		preSignedHttp, storageDir, err := s.s3Client.PresignObject(
 			ctx,
-			input,
-			s3.WithPresignExpires(10*time.Minute),
+			tokenInfo.Bucket,
+			tokenInfo.SubDir,
+			uuid.NewString(),
+			reqBody.ContentType,
+			reqBody.CsvFileName,
+			optFns...,
 		)
 
 		if err != nil {
@@ -428,7 +442,7 @@ func (s *Server) GeneratePresignedURL() {
 			return
 		}
 
-		dataResp["object_key"] = objectKey
+		dataResp["object_key"] = storageDir
 		dataResp["upload_url"] = preSignedHttp
 
 		utils.WriteResponse(w, http.StatusCreated, dataResp)
@@ -441,9 +455,10 @@ func (s *Server) GeneratePresignedURL() {
 }
 
 type StreamCSVParams struct {
-	FileName string `json:"file_name"`
-	Bucket   string `json:"bucket_name"`
+	Bucket   string `json:"bucket_name"` // nama skema
+	SubDir   string `json:"sub_dir"`     // location/warehouse/parent
 	Key      string `json:"key"`
+	FileName string `json:"file_name"`
 }
 
 func (s *Server) ProcessStream() {
@@ -463,11 +478,13 @@ func (s *Server) ProcessStream() {
 			return
 		}
 
-		result, err := s.s3Client.GetObject(ctx, &s3.GetObjectInput{
-			Bucket: aws.String(reqBody.Bucket),
-			Key:    aws.String(fmt.Sprintf("%s/%s", reqBody.Key, reqBody.FileName)),
-		})
-
+		result, err := s.s3Client.GetObject(
+			ctx,
+			reqBody.Bucket,
+			reqBody.SubDir,
+			reqBody.Key,
+			reqBody.FileName,
+		)
 		if err != nil {
 			dataResp["message"] = err.Error()
 			utils.WriteErrorResponse(w, http.StatusBadRequest, dataResp)
@@ -483,7 +500,7 @@ func (s *Server) ProcessStream() {
 			return
 		}
 
-		dataResp["data"] = csvData
+		dataResp["data"] = len(csvData.Rows)
 		dataResp["message"] = "success get data"
 
 		utils.WriteResponse(w, http.StatusAccepted, dataResp)
