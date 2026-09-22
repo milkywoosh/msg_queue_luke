@@ -76,7 +76,7 @@ func (s *SeaweedS3) PresignObject(
 }
 
 // upload via server
-func (s *SeaweedS3) PutObject(ctx context.Context, bucket, subDir, fileName string, file io.Reader) (*s3.PutObjectOutput, error) {
+func (s *SeaweedS3) PutObject(ctx context.Context, bucket, subDir, fileName string, file io.Reader) (*s3.PutObjectOutput, string, error) {
 	objectKey := fmt.Sprintf(
 		"%s/%s/%s",
 		subDir,
@@ -84,11 +84,16 @@ func (s *SeaweedS3) PutObject(ctx context.Context, bucket, subDir, fileName stri
 		fileName,
 	)
 
-	return s.Client.PutObject(ctx, &s3.PutObjectInput{
+	output, err := s.Client.PutObject(ctx, &s3.PutObjectInput{
 		Bucket: aws.String(bucket),
 		Key:    aws.String(objectKey),
 		Body:   file, // io.Reader // multipart.File type
 	})
+	if err != nil {
+		return nil, "", err
+	}
+
+	return output, fmt.Sprintf("%s/%s", bucket, objectKey), nil
 
 }
 

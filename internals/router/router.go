@@ -274,7 +274,7 @@ func (s *Server) UploadStream() {
 			return
 		}
 
-		_, err = s.s3Client.PutObject(
+		_, storageDir, err := s.s3Client.PutObject(
 			ctx,
 			tokenInfo.Bucket,
 			tokenInfo.Location,
@@ -290,6 +290,7 @@ func (s *Server) UploadStream() {
 
 		dataResp["no_trans"] = noTrans
 		dataResp["message"] = "berhasil upload"
+		dataResp["storage_dir"] = storageDir
 		dataResp["file_name"] = fileName
 		dataResp["content_type"] = headerContentType
 		dataResp["size"] = size
@@ -366,7 +367,7 @@ func (s *Server) UploadStreamAsync() {
 			return
 		}
 
-		_, err = s.s3Client.PutObject(
+		_, _, err = s.s3Client.PutObject(
 			ctx,
 			tokenInfo.Bucket,
 			tokenInfo.Location,

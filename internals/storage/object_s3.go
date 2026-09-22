@@ -20,7 +20,7 @@ type ObjectS3 interface {
 	) (*v4.PresignedHTTPRequest, string, error)
 	EnsureBucket(ctx context.Context, bucket string) error
 	// note directory yg akan di-generate bucket/subdir/key/filename.ext
-	PutObject(ctx context.Context, bucket, subDir, fileName string, file io.Reader) (*s3.PutObjectOutput, error)
+	PutObject(ctx context.Context, bucket, subDir, fileName string, file io.Reader) (*s3.PutObjectOutput, string, error)
 	// normally info bucket/subDir/key, fileName disimpan di DB
 	GetObject(ctx context.Context, bucket, subDir, key, fileName string) (*s3.GetObjectOutput, error)
 }
