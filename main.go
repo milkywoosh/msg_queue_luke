@@ -77,7 +77,7 @@ func main() {
 		log.Fatal(err)
 	}
 
-	const bucket = "uploads"
+	const bucket = "parent-dir"
 	if err := storage.EnsureBucket(ctx, newS3Client, bucket); err != nil {
 		log.Fatal(err)
 	}
