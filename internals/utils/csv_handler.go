@@ -2,6 +2,7 @@ package utils
 
 import (
 	"encoding/csv"
+	"fmt"
 	"io"
 )
 
@@ -11,17 +12,18 @@ type CSVData struct {
 }
 
 // accept any object that implement io.Reader
-func CSVReader(fileMultipart io.Reader) (*CSVData, error) {
-	reader := csv.NewReader(fileMultipart)
+func CSVReader(fileWithoutHeader io.Reader) (*CSVData, error) {
+	reader := csv.NewReader(fileWithoutHeader)
+	reader.Comma = ';'
 
 	columns, err := reader.Read()
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to read CSV header: %w", err)
 	}
 
 	rows, err := reader.ReadAll()
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to read CSV rows: %w", err)
 	}
 
 	return &CSVData{

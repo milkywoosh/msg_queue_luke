@@ -11,6 +11,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/julienschmidt/httprouter"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -37,7 +38,7 @@ type Server struct {
 	pub        *msgqueue.PublisherChan
 	mu         sync.Mutex
 	email      *utils.Config
-	s3         *s3.Client
+	s3Client   *s3.Client
 }
 
 func NewServer(
@@ -57,7 +58,7 @@ func NewServer(
 		storeTmp:   service.Store, // init pertama di main, need mutex
 		service:    service,
 		pub:        pub,
-		s3:         s3,
+		s3Client:   s3,
 	}
 
 	srv := &http.Server{
@@ -70,6 +71,8 @@ func NewServer(
 	s.AddData()
 	s.GetData()
 	s.UploadStream()
+	s.UploadStreamAsync()
+	s.GeneratePresignedURL()
 	s.ProcessStream()
 
 	return s, nil
@@ -264,7 +267,7 @@ func (s *Server) UploadStream() {
 			return
 		}
 
-		_, err = s.s3.PutObject(ctx, &s3.PutObjectInput{
+		_, err = s.s3Client.PutObject(ctx, &s3.PutObjectInput{
 			Bucket: aws.String("uploads"), // ?? uploads berdasarkan apa?
 			Key:    aws.String(fmt.Sprintf("docs/%s", fileName)),
 			Body:   file, // multipart.File type
@@ -290,8 +293,157 @@ func (s *Server) UploadStream() {
 	})
 }
 
+func (s *Server) UploadStreamAsync() {
+	// csv files 100 rows
+
+	// upload ke storage
+	// background process go routine I/O process
+
+	// response
+	// langsung info response ["failed", "queue"]
+	/*
+		{
+			"no_trans": "xxxx",
+			"status_upload": ""
+		}
+	*/
+
+	s.router.POST("/api/v1/upload-csv/async", func(w http.ResponseWriter, r *http.Request, p httprouter.Params) {
+
+		ctx := r.Context()
+		dataResp := make(map[string]any)
+
+		// err := r.ParseMultipartForm(10 << 20) // max 10Mb
+		err := r.ParseMultipartForm(5 << 20) // max 5Mb
+		if err != nil {
+			dataResp["message"] = err.Error()
+			utils.WriteErrorResponse(w, http.StatusBadRequest, dataResp)
+			return
+		}
+
+		file, header, err := r.FormFile("csv_file")
+		if err != nil {
+			dataResp["message"] = err.Error()
+			utils.WriteErrorResponse(w, http.StatusBadRequest, dataResp)
+			return
+		}
+
+		defer file.Close()
+
+		csvData, err := utils.CSVReader(file)
+		if err != nil {
+			dataResp["message"] = err.Error()
+			utils.WriteErrorResponse(w, http.StatusBadRequest, dataResp)
+			return
+		}
+
+		fileName := header.Filename
+		headerContentType := header.Header.Get("Content-Type")
+		size := header.Size
+		field := csvData.Columns
+		rows := csvData.Rows
+
+		noTrans := r.FormValue("no_trans")
+
+		// probably the file is empty, handle if empty
+		if _, err := file.Seek(0, io.SeekStart); err != nil {
+			dataResp["message"] = err.Error()
+			utils.WriteErrorResponse(w, http.StatusBadRequest, dataResp)
+			return
+		}
+
+		_, err = s.s3Client.PutObject(ctx, &s3.PutObjectInput{
+			Bucket: aws.String("uploads"), // ?? uploads berdasarkan apa?
+			Key:    aws.String(fmt.Sprintf("docs/%s", fileName)),
+			Body:   file, // multipart.File type
+			// Body:   strings.NewReader("halo dari S3 lokal"),
+		})
+
+		if err != nil {
+			dataResp["message"] = err.Error()
+			utils.WriteErrorResponse(w, http.StatusBadRequest, dataResp)
+			return
+		}
+
+		dataResp["no_trans"] = noTrans
+		dataResp["message"] = "berhasil upload"
+		dataResp["file_name"] = fileName
+		dataResp["content_type"] = headerContentType
+		dataResp["size"] = size
+		dataResp["field"] = field
+		dataResp["rows"] = rows[0:]
+
+		utils.WriteResponse(w, http.StatusAccepted, dataResp)
+
+	})
+}
+
+type PresignedParams struct {
+	CsvFileName string `json:"file_name"`
+	ContentType string `json:"content_type"`
+	BucketName  string `json:"bucket_name"`
+}
+
+func (s *Server) GeneratePresignedURL() {
+
+	s.router.POST("/api/v1/presigned-url", func(w http.ResponseWriter, r *http.Request, p httprouter.Params) {
+
+		ctx := r.Context()
+		dataResp := make(map[string]any)
+		var reqBody PresignedParams
+
+		err := json.NewDecoder(r.Body).Decode(&reqBody)
+		if err != nil {
+			dataResp["message"] = err.Error()
+			utils.WriteErrorResponse(w, http.StatusBadRequest, dataResp)
+			return
+		}
+
+		// directory where file stored at S3
+		objectKey := fmt.Sprintf(
+			"%s/%s",
+			uuid.NewString(),
+			reqBody.CsvFileName,
+		)
+
+		// implement io.Reader
+
+		input := &s3.PutObjectInput{
+			Bucket:      aws.String(reqBody.BucketName),
+			Key:         aws.String(objectKey),
+			ContentType: aws.String(reqBody.ContentType),
+		}
+
+		presignClient := s3.NewPresignClient(s.s3Client)
+
+		preSignedHttp, err := presignClient.PresignPutObject(
+			ctx,
+			input,
+			s3.WithPresignExpires(10*time.Minute),
+		)
+
+		if err != nil {
+			dataResp["message"] = err.Error()
+			utils.WriteErrorResponse(w, http.StatusBadRequest, dataResp)
+			return
+		}
+
+		dataResp["object_key"] = objectKey
+		dataResp["upload_url"] = preSignedHttp
+
+		utils.WriteResponse(w, http.StatusCreated, dataResp)
+
+		/*
+			note abis ini langsung call upload url dan kirim csv file, vai insomnia aja
+		*/
+	})
+
+}
+
 type StreamCSVParams struct {
 	FileName string `json:"file_name"`
+	Bucket   string `json:"bucket_name"`
+	Key      string `json:"key"`
 }
 
 func (s *Server) ProcessStream() {
@@ -311,9 +463,9 @@ func (s *Server) ProcessStream() {
 			return
 		}
 
-		result, err := s.s3.GetObject(ctx, &s3.GetObjectInput{
-			Bucket: aws.String("uploads"),
-			Key:    aws.String(fmt.Sprintf("docs/%s", reqBody.FileName)),
+		result, err := s.s3Client.GetObject(ctx, &s3.GetObjectInput{
+			Bucket: aws.String(reqBody.Bucket),
+			Key:    aws.String(fmt.Sprintf("%s/%s", reqBody.Key, reqBody.FileName)),
 		})
 
 		if err != nil {
