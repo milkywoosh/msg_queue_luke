@@ -43,10 +43,30 @@ cmd: aws --endpoint-url http://localhost:8333 s3 ls s3://uploads<bucker-name>
 
 cmd: aws --endpoint-url http://localhost:8333 s3 ls s3://uploads --recursive
 
-cmd: aws configure
 
+donwload langsung
+cmd: aws --endpoint-url http://localhost:8333 \
+  s3 cp \
+  s3://parent-dir/dce11d51-3e35-41c6-9877-e2bc6f9ae865/person_100_rows.csv \
+  -
+
+cmd: aws configure
 
 AWS Access Key ID [None]:
 AWS Secret Access Key [None]:
 Default region name [None]:
 Default output format [None]:
+
+
+aws --endpoint-url http://localhost:8333 \
+  s3 cp \
+  s3://parent-dir/3506c212-787c-453c-bba0-22616780e6e3/person_100_rows.csv \
+  downloaded.csv
+
+aws --endpoint-url http://localhost:8333 \
+  s3 cp \
+  s3://parent-dir/91b049e3-c7eb-4c61-97ad-84c5a1ec1e77/person_100_rows.csv \
+  downloaded.csv
+  
+
+  
