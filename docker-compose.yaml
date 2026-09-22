@@ -52,6 +52,8 @@ services:
       - "8333:8333"
     volumes:
       - s3-data:/data
+    networks:
+      - backend-queue
 configs:
   rabbitmq-plugins:
     content: "[rabbitmq_management]."  
