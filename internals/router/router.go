@@ -245,7 +245,8 @@ func (s *Server) UploadStream() {
 
 		file, header, err := r.FormFile("csv_file")
 		if err != nil {
-			dataResp["message"] = err.Error()
+			msg := fmt.Sprintf("err empty file 1, %s", err.Error())
+			dataResp["message"] = msg
 			utils.WriteErrorResponse(w, http.StatusBadRequest, dataResp)
 			return
 		}
@@ -254,7 +255,8 @@ func (s *Server) UploadStream() {
 
 		csvData, err := utils.CSVReader(file)
 		if err != nil {
-			dataResp["message"] = err.Error()
+			msg := fmt.Sprintf("err empty file 2, %s", err.Error())
+			dataResp["message"] = msg
 			utils.WriteErrorResponse(w, http.StatusBadRequest, dataResp)
 			return
 		}
@@ -269,7 +271,8 @@ func (s *Server) UploadStream() {
 
 		// probably the file is empty, handle if empty
 		if _, err := file.Seek(0, io.SeekStart); err != nil {
-			dataResp["message"] = err.Error()
+			msg := fmt.Sprintf("err empty file 3, %s", err.Error())
+			dataResp["message"] = msg
 			utils.WriteErrorResponse(w, http.StatusBadRequest, dataResp)
 			return
 		}
