@@ -7,7 +7,7 @@ import (
 	"msgqueue-luke.com/v2/internals/domain"
 )
 
-func SetupMQ(conn *amqp091.Connection, declare domain.OrderQueueSetup) error {
+func SetupMQ(conn *amqp091.Connection, declare domain.QueueSetup) error {
 
 	// setup exchange
 	// setup queue

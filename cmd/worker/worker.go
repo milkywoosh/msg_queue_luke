@@ -60,7 +60,7 @@ func main() {
 	}
 
 	// note: declare exchange dan queue boleh dilakukan 2x selama parameter sama semua, karena sifatnya IDEMPOTEN
-	excDirectSetup := domain.NewOrderQueueSetup("order.exchange", "direct", "order.create", "order.queue")
+	excDirectSetup := domain.NewQueueSetup("order.exchange", "direct", "order.create", "order.queue")
 	err = msgqueue.SetupMQ(connAmpq, excDirectSetup)
 	if err != nil {
 		log.Printf("msgqueue.SetupMQ: %v", err)

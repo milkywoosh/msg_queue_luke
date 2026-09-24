@@ -53,14 +53,14 @@ func main() {
 	// note sebaiknya channel Consumer di-define di scope function each consumer agar create CHAN berbeda dari 1 connection awal
 	//  untuk setup exchange, routeKey dan queue karena akan dipakai consumer
 
-	excDirectSetupOrderStore := domain.NewOrderQueueSetup("order.exchange", "direct", "order.create", "order.store")
+	excDirectSetupOrderStore := domain.NewQueueSetup("order.exchange", "direct", "order.create", "order.store")
 	err = msgqueue.SetupMQ(connAmpq, excDirectSetupOrderStore)
 	if err != nil {
 		log.Printf("msgqueue.SetupMQ: %v", err)
 		panic(err)
 	}
 
-	excDirectSetupNotifEmail := domain.NewOrderQueueSetup("order.exchange", "direct", "order.notif.email", "email")
+	excDirectSetupNotifEmail := domain.NewQueueSetup("order.exchange", "direct", "order.notif.email", "email")
 	err = msgqueue.SetupMQ(connAmpq, excDirectSetupNotifEmail)
 	if err != nil {
 		log.Printf("msgqueue.SetupMQ: %v", err)
@@ -72,11 +72,6 @@ func main() {
 	newDb := db.NewStoreMain()
 	newNotifEmail := utils.NewNotifEmail() // create pointer
 	newOrder := service.NewOrderProcess(newDb)
-
-	// newS3Client, err := storage.NewClient(ctx, cfg.AccessKeyS3, cfg.SecretKeyS3, cfg.AddressS3)
-	// if err != nil {
-	// 	log.Fatal(err)
-	// }
 
 	newClientS3, err := storage.NewClientObjectS3(ctx, cfg.AccessKeyS3, cfg.SecretKeyS3, cfg.AddressS3)
 	if err != nil {

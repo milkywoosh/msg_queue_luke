@@ -5,14 +5,12 @@ import (
 	"errors"
 	"fmt"
 	"log"
-	"sync"
 	"time"
 
 	"github.com/rabbitmq/amqp091-go"
 )
 
 type PublisherChan struct {
-	mu sync.Mutex // kayanya gak kepake, karena lock sudah build in di lib amqp
 	ch *amqp091.Channel
 }
 
@@ -24,6 +22,7 @@ func NewPubChan(conn *amqp091.Connection) (*PublisherChan, error) {
 	}
 
 	if err := newChan.Confirm(false); err != nil {
+		_ = newChan.Close()
 		return nil, err
 	}
 
@@ -41,9 +40,9 @@ func (p *PublisherChan) GetCh() *amqp091.Channel {
 }
 
 // letak di main goroutine
-func PublishOrder(ctx context.Context, ch *amqp091.Channel, exchg, routingKey, orderID, userId string) error {
+func PublishOrder(ctx context.Context, chPublisher *amqp091.Channel, exchg, routingKey, orderID, userId string) error {
 
-	deferedConf, err := ch.PublishWithDeferredConfirmWithContext(
+	deferedConf, err := chPublisher.PublishWithDeferredConfirmWithContext(
 		ctx,
 		exchg,
 		routingKey, // connect exchange and queue
@@ -61,12 +60,19 @@ func PublishOrder(ctx context.Context, ch *amqp091.Channel, exchg, routingKey, o
 	}
 
 	if deferedConf == nil {
-		// setahu saya, nil berarti channel belum confirm mode
+		// probs nil berarti channel belum confirm mode
 		return errors.New("channel not in confirm mode")
 	}
 
-	acked, err := deferedConf.WaitContext(ctx)
+	// wait context kasih 5 detik agar goroutine tidak tunggu too long
+	ctxWithTimeout, cancelFunc := context.WithTimeout(ctx, 5*time.Second)
+	defer cancelFunc()
+
+	acked, err := deferedConf.WaitContext(ctxWithTimeout)
 	if err != nil {
+		if errors.Is(err, context.DeadlineExceeded) {
+			return fmt.Errorf("confirm wait timeout: %w", err)
+		}
 		return fmt.Errorf("wait confirm: %w", err)
 	}
 	if !acked {

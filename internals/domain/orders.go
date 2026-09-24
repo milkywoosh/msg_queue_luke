@@ -1,14 +1,14 @@
 package domain
 
-type OrderQueueSetup struct {
+type QueueSetup struct {
 	ExchangeName string
 	TypeExchange string
 	RouteKeyName string
 	QueueName    string
 }
 
-func NewOrderQueueSetup(exchange, typeExchg, routekey, queue string) OrderQueueSetup {
-	return OrderQueueSetup{
+func NewQueueSetup(exchange, typeExchg, routekey, queue string) QueueSetup {
+	return QueueSetup{
 		ExchangeName: exchange,
 		TypeExchange: typeExchg,
 		RouteKeyName: routekey,

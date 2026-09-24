@@ -36,9 +36,15 @@ func ConsumerOrder(ctx context.Context, conn *amqp091.Connection, exchg, queue s
 	}
 
 	for msg := range delivConsumer {
+
+		// msg.MessageId
+		// msg.Exchange
+		// msg.Priority
+
 		log.Printf("received msg: %s", string(msg.Body))
 
 		err := event.ProcessData(string(msg.Body), string(msg.Body))
+		// if ada error then Nack
 		if err != nil {
 			log.Printf("failed to process message: %v | body: %s", err, string(msg.Body))
 
@@ -49,6 +55,7 @@ func ConsumerOrder(ctx context.Context, conn *amqp091.Connection, exchg, queue s
 			continue // lanjut ke pesan berikutnya, JANGAN return
 		}
 
+		// if ada NO ERR then Ack
 		if ackErr := msg.Ack(false); ackErr != nil {
 			log.Printf("failed to ack message: %v", ackErr)
 			continue
