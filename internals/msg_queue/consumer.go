@@ -3,10 +3,7 @@ package msgqueue
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"log"
-
-	"path/filepath"
 
 	"github.com/rabbitmq/amqp091-go"
 	"msgqueue-luke.com/v2/internals/mail"
@@ -128,7 +125,7 @@ func ConsumerEmailNotif(ctx context.Context, conn *amqp091.Connection, exchg, qu
 			continue
 		}
 
-		log.Printf("msg processed and acked successfully")
+		log.Printf("msg email notif processed and acked successfully")
 	}
 
 	return nil

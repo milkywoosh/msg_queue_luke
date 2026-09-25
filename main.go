@@ -14,6 +14,7 @@ import (
 
 	"msgqueue-luke.com/v2/internals/db"
 	"msgqueue-luke.com/v2/internals/domain"
+	"msgqueue-luke.com/v2/internals/mail"
 	msgqueue "msgqueue-luke.com/v2/internals/msg_queue"
 	"msgqueue-luke.com/v2/internals/router"
 	"msgqueue-luke.com/v2/internals/service"
@@ -72,8 +73,9 @@ func main() {
 	waitGroup, ctxWg := errgroup.WithContext(ctx)
 
 	newDb := db.NewStoreMain()
-	newNotifEmail := utils.NewNotifEmail() // create pointer
+	// newNotifEmail := utils.NewNotifEmail() // create pointer
 	newOrder := service.NewOrderProcess(newDb)
+	newGmailSender := mail.NewGmailSender(cfg.EmailSenderName, cfg.EmailSenderAddress, cfg.EmailSenderPassword)
 
 	newClientS3, err := storage.NewClientObjectS3(ctx, cfg.AccessKeyS3, cfg.SecretKeyS3, cfg.AddressS3)
 	if err != nil {
@@ -97,7 +99,7 @@ func main() {
 	})
 
 	waitGroup.Go(func() error {
-		return msgqueue.ConsumerOrder(ctxWg, connAmpq, excDirectSetupNotifEmail.ExchangeName, excDirectSetupNotifEmail.QueueName, "worker-order-2", newNotifEmail)
+		return msgqueue.ConsumerEmailNotif(ctxWg, connAmpq, excDirectSetupNotifEmail.ExchangeName, excDirectSetupNotifEmail.QueueName, "worker-order-2", newGmailSender)
 	})
 
 	waitGroup.Go(func() error {

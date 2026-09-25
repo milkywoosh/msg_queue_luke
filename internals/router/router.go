@@ -16,6 +16,7 @@ import (
 	"github.com/julienschmidt/httprouter"
 	"github.com/rabbitmq/amqp091-go"
 	"msgqueue-luke.com/v2/internals/db"
+	"msgqueue-luke.com/v2/internals/mail"
 	msgqueue "msgqueue-luke.com/v2/internals/msg_queue"
 	"msgqueue-luke.com/v2/internals/service"
 	"msgqueue-luke.com/v2/internals/storage"
@@ -69,6 +70,7 @@ func NewServer(
 	s.httpserver = srv
 	s.AddRoute()
 	s.AddData()
+	s.AddDataMultipart()
 	s.GetData()
 	s.UploadStream()
 	s.UploadStreamAsync()
@@ -98,6 +100,128 @@ type AddDataParams struct {
 func (s *Server) storeData(key, value string) error {
 
 	return s.storeTmp.Create(key, value)
+}
+
+func (s *Server) AddDataMultipart() {
+	s.router.POST("/api/v1/add-data-multipart", func(w http.ResponseWriter, r *http.Request, p httprouter.Params) {
+
+		dataResp := make(map[string]any)
+		tokenInfo := struct {
+			Bucket, SubDir, Email string
+		}{
+			"scmt", "PGC001", "auliya.lukman@sigma.co.id",
+		}
+
+		keyReq := r.FormValue("key")
+		valueReq := r.FormValue("value")
+		file1, header1, err := r.FormFile("file1")
+		if err != nil {
+			msg := fmt.Sprintf("err empty file 1, %s", err.Error())
+			dataResp["message"] = msg
+			utils.WriteErrorResponse(w, http.StatusBadRequest, dataResp)
+			return
+		}
+		file2, header2, err := r.FormFile("file2")
+		if err != nil {
+			msg := fmt.Sprintf("err empty file 2, %s", err.Error())
+			dataResp["message"] = msg
+			utils.WriteErrorResponse(w, http.StatusBadRequest, dataResp)
+			return
+		}
+
+		err = s.storeData(keyReq, valueReq)
+		if err != nil {
+			dataResp["message"] = err.Error()
+			utils.WriteErrorResponse(
+				w,
+				http.StatusBadRequest,
+				dataResp,
+			)
+			return
+		}
+
+		msgPub := amqp091.Publishing{
+			ContentType: "text/plain",
+			UserId:      "lukerbtmq",
+			Timestamp:   time.Now(),
+			Body:        []byte(keyReq),
+		}
+
+		errCreatePub := s.pub.Publish(
+			r.Context(),
+			"order.exchange",
+			"order.create",
+			msgPub,
+		)
+
+		if errCreatePub != nil {
+			log.Printf("publish test: %s", errCreatePub.Error())
+
+			// note: prob need to send to error log info, no stoper
+			// service.recordLog(identifier, errMessage)
+
+			dataResp["message"] = errCreatePub.Error()
+			utils.WriteErrorResponse(
+				w,
+				http.StatusBadRequest,
+				dataResp,
+			)
+			return
+		} else {
+			subject := "A test email"
+			content := fmt.Sprintf(`
+			<h1>Hello %s</h1>
+			<p>This is a test message from Lukman email queue</a></p>
+			`, keyReq)
+			to := []string{tokenInfo.Email}
+			// attachFiles := []string{"../../note.txt", "../../readme.md"}
+			attachFiles := []mail.AttachFileDetail{}
+			att1 := mail.NewAttachFileDetail(file1, header1.Filename, "text/csv")
+			att2 := mail.NewAttachFileDetail(file2, header2.Filename, "text/csv")
+			attachFiles = append(attachFiles, att1, att2)
+
+			newEmail := mail.NewEmailPayload(
+				subject,
+				content,
+				to,
+				nil,
+				nil,
+				nil, // attachFiles,
+			)
+
+			body, err := json.Marshal(newEmail)
+			if err != nil {
+				dataResp["message"] = err.Error()
+				utils.WriteErrorResponse(
+					w,
+					http.StatusBadRequest,
+					dataResp,
+				)
+			}
+
+			msgEmailNotif := amqp091.Publishing{
+				ContentType: "application/json",
+				UserId:      "lukerbtmq",
+				Timestamp:   time.Now(),
+				Body:        []byte(body),
+			}
+			errNotifEmail := s.pub.Publish(
+				r.Context(),
+				"order.exchange",
+				"order.notif.email",
+				msgEmailNotif, // cuman message di-publish
+			)
+
+			if errNotifEmail != nil {
+				log.Printf("notif email: %s", errNotifEmail.Error())
+			}
+		}
+
+		dataResp["data"] = valueReq
+		dataResp["message"] = fmt.Sprintf("order %s dalam antrian update", keyReq)
+
+		utils.WriteResponse(w, http.StatusAccepted, dataResp)
+	})
 }
 
 func (s *Server) AddData() {
@@ -157,18 +281,17 @@ func (s *Server) AddData() {
 			return
 		} else {
 
-			emailNotif := fmt.Sprintf("email notif: %s", addDataParams.Key)
 			msgEmailNotif := amqp091.Publishing{
-				ContentType: "text/plain",
+				ContentType: "application/json",
 				UserId:      "lukerbtmq",
 				Timestamp:   time.Now(),
-				Body:        []byte(emailNotif),
+				Body:        []byte(addDataParams.Key),
 			}
 			errNotifEmail := s.pub.Publish(
 				r.Context(),
 				"order.exchange",
 				"order.notif.email",
-				msgEmailNotif,
+				msgEmailNotif, // cuman message di-publish
 			)
 
 			if errNotifEmail != nil {
