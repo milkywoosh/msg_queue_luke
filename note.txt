@@ -70,4 +70,4 @@ aws --endpoint-url http://localhost:8333 \
   downloaded.csv
   
 
-  
+go test -v -run ^TestNewSeaweedS3$ ./...

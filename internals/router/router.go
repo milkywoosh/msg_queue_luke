@@ -14,7 +14,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/google/uuid"
 	"github.com/julienschmidt/httprouter"
-
+	"github.com/rabbitmq/amqp091-go"
 	"msgqueue-luke.com/v2/internals/db"
 	msgqueue "msgqueue-luke.com/v2/internals/msg_queue"
 	"msgqueue-luke.com/v2/internals/service"
@@ -35,7 +35,7 @@ type Server struct {
 	router     *httprouter.Router
 	storeTmp   *db.StoreMain
 	service    *service.OrderProcess
-	pub        *msgqueue.PublisherChan
+	pub        *msgqueue.PublisherPool //PublisherChan
 	mu         sync.Mutex
 	email      *utils.Config
 	s3Client   storage.ObjectS3
@@ -43,7 +43,7 @@ type Server struct {
 
 func NewServer(
 	cfg utils.Config,
-	pub *msgqueue.PublisherChan,
+	pub *msgqueue.PublisherPool, // prev: *msgqueue.PublisherChan
 	service *service.OrderProcess,
 	s3Client storage.ObjectS3,
 ) (*Server, error) {
@@ -128,43 +128,51 @@ func (s *Server) AddData() {
 			return
 		}
 
-		ch := s.pub.GetCh()
+		msgPub := amqp091.Publishing{
+			ContentType: "text/plain",
+			UserId:      "lukerbtmq",
+			Timestamp:   time.Now(),
+			Body:        []byte(addDataParams.Key),
+		}
 
-		errCreatePub := msgqueue.PublishOrder(
+		errCreatePub := s.pub.Publish(
 			r.Context(),
-			ch,
 			"order.exchange",
 			"order.create",
-			addDataParams.Key, // id order : says ORD001ITEM
-			"lukerbtmq",
+			msgPub,
 		)
+
 		if errCreatePub != nil {
 			log.Printf("publish test: %s", errCreatePub.Error())
 
 			// note: prob need to send to error log info, no stoper
-
 			// service.recordLog(identifier, errMessage)
 
-			// dataResp["message"] = err.Error()
-			// utils.WriteErrorResponse(
-			// 	w,
-			// 	http.StatusBadRequest,
-			// 	dataResp,
-			// )
-			// return
-		}
+			dataResp["message"] = errCreatePub.Error()
+			utils.WriteErrorResponse(
+				w,
+				http.StatusBadRequest,
+				dataResp,
+			)
+			return
+		} else {
 
-		if errCreatePub == nil {
-			errNotifEmail := msgqueue.PublishOrder(
+			emailNotif := fmt.Sprintf("email notif: %s", addDataParams.Key)
+			msgEmailNotif := amqp091.Publishing{
+				ContentType: "text/plain",
+				UserId:      "lukerbtmq",
+				Timestamp:   time.Now(),
+				Body:        []byte(emailNotif),
+			}
+			errNotifEmail := s.pub.Publish(
 				r.Context(),
-				ch,
 				"order.exchange",
 				"order.notif.email",
-				addDataParams.Key, // id order : says ORD001ITEM
-				"lukerbtmq",
+				msgEmailNotif,
 			)
+
 			if errNotifEmail != nil {
-				log.Printf("publish email: %s", errNotifEmail.Error())
+				log.Printf("notif email: %s", errNotifEmail.Error())
 			}
 		}
 

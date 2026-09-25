@@ -3,14 +3,17 @@ package msgqueue
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log"
+	"time"
 
 	"github.com/rabbitmq/amqp091-go"
 )
 
 type PublisherPool struct {
-	conn *amqp091.Connection
-	pool chan *amqp091.Channel // pool of channel berisi struct(*amqp091.Channel)
+	conn     *amqp091.Connection
+	pool     chan *amqp091.Channel // pool of channel berisi struct(*amqp091.Channel)
+	sizePool int
 }
 
 func (p *PublisherPool) newChannel() (*amqp091.Channel, error) {
@@ -29,14 +32,15 @@ func (p *PublisherPool) newChannel() (*amqp091.Channel, error) {
 }
 
 func NewPublisherPool(conn *amqp091.Connection, sizePool int) (*PublisherPool, error) {
-	p := &PublisherPool{conn: conn, pool: make(chan *amqp091.Channel, sizePool)}
+	p := &PublisherPool{conn: conn, pool: make(chan *amqp091.Channel, sizePool), sizePool: sizePool}
 
 	// create pool channel amqp up to 3(size) slot
-	for i := 0; i < sizePool; i++ {
+	for i := 0; i < p.sizePool; i++ {
 		ch, err := p.newChannel()
 		if err != nil {
 			return nil, err
 		}
+		// populating ch ke pool CHANNEL buffer isi amqp091
 		p.pool <- ch
 	}
 
@@ -46,10 +50,11 @@ func NewPublisherPool(conn *amqp091.Connection, sizePool int) (*PublisherPool, e
 }
 
 func (p *PublisherPool) acquire(ctx context.Context) (*amqp091.Channel, error) {
-
+	var ch *amqp091.Channel = nil
 	select {
 	// p.pool = pool of amqp091.Channel yang Open dan Closed
-	case ch := <-p.pool:
+	case ch = <-p.pool:
+		// kapan dan kenapa channel isClosed: [connection mati, exception dr broker, di-close()
 		if ch.IsClosed() {
 			// if ch closed, trus create new amqp channl
 			ch, err := p.newChannel()
@@ -83,10 +88,22 @@ func (p *PublisherPool) Publish(ctx context.Context, exchange, routingKey string
 	if err != nil {
 		return err
 	}
-	ack, err := deferredConfirm.WaitContext(ctx)
-	if err != nil {
-		return err
+
+	if deferredConfirm == nil {
+		return errors.New("channel not in confirm mode")
 	}
+
+	ctxTO, cancelFunc := context.WithTimeout(ctx, 5*time.Second)
+	defer cancelFunc()
+
+	ack, err := deferredConfirm.WaitContext(ctxTO)
+	if err != nil {
+		if errors.Is(err, context.DeadlineExceeded) {
+			return fmt.Errorf("confirm timeout deadline exceeded: %w", err)
+		}
+		return fmt.Errorf("wait confirm: %w", err)
+	}
+
 	if !ack {
 		return ErrBrokerNotConfirm
 	}
@@ -94,6 +111,30 @@ func (p *PublisherPool) Publish(ctx context.Context, exchange, routingKey string
 	// publish berhasil dan broker sudah ack
 	return nil
 
+}
+
+func (p *PublisherPool) CloseAllChann(ctx context.Context) error {
+
+	var errs []error
+
+	for i := 0; i < p.sizePool; i++ {
+		select {
+		case ch := <-p.pool:
+			if !ch.IsClosed() {
+				if err := ch.Close(); err != nil {
+					errs = append(errs, fmt.Errorf("close channel %d: %w", i, err))
+				}
+			}
+		// pool nggak ngasih channel tepat waktu, fallback nya ini boy
+		case <-ctx.Done():
+			errs = append(errs, ctx.Err())
+			// klo ctx.Err() nil pasti err is nil
+			return errors.Join(errs...)
+		}
+	}
+
+	// result nil klo gak semua yg di-append (err is nil)
+	return errors.Join(errs...)
 }
 
 // func (p *PublisherPool)

@@ -45,7 +45,9 @@ func main() {
 	defer connAmpq.Close()
 	fmt.Printf("test :%s", "message queue\n")
 
-	pubChan, err := msgqueue.NewPubChan(connAmpq)
+	// pubChan, err := msgqueue.NewPubChan(connAmpq)
+
+	publisherPool, err := msgqueue.NewPublisherPool(connAmpq, 3)
 	if err != nil {
 		log.Fatalf("err NewPubChan: %s", err.Error())
 	}
@@ -85,7 +87,7 @@ func main() {
 		log.Fatal(err)
 	}
 
-	newServer, err := router.NewServer(cfg, pubChan, newOrder, objectStorage)
+	newServer, err := router.NewServer(cfg, publisherPool, newOrder, objectStorage)
 	if err != nil {
 		panic(err)
 	}
@@ -116,9 +118,9 @@ func main() {
 		log.Println("shutting down http server...")
 
 		// harus ctx bg baru
-		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 
-		defer pubChan.Close()
+		defer publisherPool.CloseAllChann(shutdownCtx)
 
 		defer cancel()
 		return newServer.Shutdown(shutdownCtx) // asumsi router.Server punya method ini
