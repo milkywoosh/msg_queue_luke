@@ -117,19 +117,26 @@ func (p *PublisherPool) CloseAllChann(ctx context.Context) error {
 
 	var errs []error
 
+	log.Printf("CloseAllChann ....")
+	log.Printf("ctx err at start: %v, len(pool)=%d, cap(pool)=%d", ctx.Err(), len(p.pool), cap(p.pool))
+
 	for i := 0; i < p.sizePool; i++ {
 		select {
 		case ch := <-p.pool:
+			log.Printf("case Pool")
 			if !ch.IsClosed() {
 				if err := ch.Close(); err != nil {
 					errs = append(errs, fmt.Errorf("close channel %d: %w", i, err))
 				}
+				log.Printf("Closed Pool done")
 			}
+			log.Printf("case Not Closed Pool")
 		// pool nggak ngasih channel tepat waktu, fallback nya ini boy
 		case <-ctx.Done():
-			errs = append(errs, ctx.Err())
+			log.Printf("case Done")
+			errs = append(errs, fmt.Errorf("ctx done at channel %d: %w", i, ctx.Err()))
 			// klo ctx.Err() nil pasti err is nil
-			return errors.Join(errs...)
+
 		}
 	}
 

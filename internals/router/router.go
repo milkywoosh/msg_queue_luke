@@ -281,22 +281,25 @@ func (s *Server) AddData() {
 			return
 		} else {
 
-			msgEmailNotif := amqp091.Publishing{
-				ContentType: "application/json",
-				UserId:      "lukerbtmq",
-				Timestamp:   time.Now(),
-				Body:        []byte(addDataParams.Key),
-			}
-			errNotifEmail := s.pub.Publish(
-				r.Context(),
-				"order.exchange",
-				"order.notif.email",
-				msgEmailNotif, // cuman message di-publish
-			)
+			/*
+				msgEmailNotif := amqp091.Publishing{
+					ContentType: "application/json",
+					UserId:      "lukerbtmq",
+					Timestamp:   time.Now(),
+					Body:        []byte(addDataParams.Key),
+				}
 
-			if errNotifEmail != nil {
-				log.Printf("notif email: %s", errNotifEmail.Error())
-			}
+					errNotifEmail := s.pub.Publish(
+						r.Context(),
+						"order.exchange",
+						"order.notif.email",
+						msgEmailNotif, // cuman message di-publish
+					)
+
+					if errNotifEmail != nil {
+						log.Printf("notif email: %s", errNotifEmail.Error())
+					}
+			*/
 		}
 
 		dataResp["data"] = addDataParams
