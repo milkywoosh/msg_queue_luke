@@ -109,7 +109,7 @@ func (s *Server) AddDataMultipart() {
 		tokenInfo := struct {
 			Bucket, SubDir, Email string
 		}{
-			"scmt", "PGC001", "auliya.lukman@sigma.co.id",
+			"scmt", "PGC001", "anyemail@mailx.com",
 		}
 
 		keyReq := r.FormValue("key")
