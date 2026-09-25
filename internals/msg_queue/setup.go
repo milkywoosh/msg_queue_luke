@@ -7,20 +7,21 @@ import (
 	"msgqueue-luke.com/v2/internals/domain"
 )
 
-func SetupMQ(ch *amqp091.Channel, declare domain.OrderQueueSetup) error {
+func SetupMQ(conn *amqp091.Connection, declare domain.QueueSetup) error {
 
 	// setup exchange
 	// setup queue
 	// setup binding queue
 
-	queueArgs := amqp091.Table{
-		amqp091.QueueTypeArg: amqp091.QueueTypeQuorum, // Resolves to "x-queue-type": "quorum"
-
-		// Optional: Add poison pill protection (highly recommended for quorum queues)
-		"x-delivery-limit": int32(5),
+	// note: cukup pake 1 channel aja untuk declare, lifecycle channel ends up after semua declaration is done
+	ch, err := conn.Channel()
+	if err != nil {
+		return err
 	}
 
-	err := ch.ExchangeDeclare(
+	defer ch.Close()
+
+	err = ch.ExchangeDeclare(
 		declare.ExchangeName,
 		declare.TypeExchange,
 		true,
@@ -41,6 +42,13 @@ func SetupMQ(ch *amqp091.Channel, declare domain.OrderQueueSetup) error {
 	// Exclusive
 	// NoWait
 	// Arguments
+	queueArgs := amqp091.Table{
+		amqp091.QueueTypeArg: amqp091.QueueTypeQuorum, // Resolves to "x-queue-type": "quorum"
+
+		// Optional: Add poison pill protection (highly recommended for quorum queues)
+		"x-delivery-limit": int32(5),
+	}
+
 	_, err = ch.QueueDeclare(
 		declare.QueueName,
 		true,

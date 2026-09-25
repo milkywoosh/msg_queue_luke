@@ -1,6 +1,10 @@
 package service
 
-import "msgqueue-luke.com/v2/internals/db"
+import (
+	"time"
+
+	"msgqueue-luke.com/v2/internals/db"
+)
 
 type OrderProcess struct {
 	Store *db.StoreMain
@@ -12,6 +16,6 @@ func NewOrderProcess(store *db.StoreMain) *OrderProcess {
 	}
 }
 
-func (o *OrderProcess) ProcessData(key string) error {
-	return o.Store.Update(key)
+func (o *OrderProcess) ProcessData(key, newval string) error {
+	return o.Store.Update(key, newval, time.Now())
 }

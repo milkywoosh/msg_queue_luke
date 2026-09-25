@@ -2,7 +2,6 @@ package db
 
 import (
 	"fmt"
-	"log"
 	"sync"
 	"time"
 )
@@ -40,7 +39,7 @@ func (s *StoreMain) Create(key, value string) error {
 	return nil
 }
 
-func (s *StoreMain) Update(key string) error {
+func (s *StoreMain) Update(key, newval string, now time.Time) error {
 	anyOldNode, exists := s.mutexMap.Load(key)
 	if !exists {
 		// Jika key belum ada, buat node baru dan simpan
@@ -54,8 +53,8 @@ func (s *StoreMain) Update(key string) error {
 	// 3. Buat objek Node baru dengan nilai dan waktu yang diperbarui
 	updatedNode := &Node{
 		Key:       oldNode.Key,
-		Value:     "cussoke",
-		UpdatedAt: oldNode.UpdatedAt.Add(1 * time.Hour), // Update timestamp di sini
+		Value:     newval,
+		UpdatedAt: now, // Update timestamp di sini
 	}
 
 	// 4. Ganti node lama dengan yang baru secara atomic.
@@ -64,6 +63,8 @@ func (s *StoreMain) Update(key string) error {
 		// return fmt.Errorf("gagal update compare swap")
 		return nil
 	}
+	// log.Printf("pass update to err")
+
 	return fmt.Errorf("gagal update compare swap")
 }
 
@@ -73,10 +74,10 @@ func (s *StoreMain) Fetch(key string) *Node {
 	if !ok {
 		return nil
 	}
-	val1, ok := val.(*Node)
-	if !ok {
-		log.Printf("failed parsing Fetch")
-		return nil
-	}
+	val1, _ := val.(*Node)
+	// if !ok {
+	// 	log.Printf("failed parsing Fetch")
+	// 	return nil
+	// }
 	return val1
 }
