@@ -6,6 +6,7 @@ A Go service that implments RabbitMQ stable version [amqp091-go](https://github.
 
 - Go 1.26 >
 - Docker & Docker Compose (for running RabbitMQ locally)
+- Use in-Memory database using sync.Map package for simplicity
 
 ## Setup
 
