@@ -70,6 +70,13 @@ func main() {
 		panic(err)
 	}
 
+	excDirectSetupCSVProcessor := domain.NewQueueSetup("csv.exchange", "direct", "csv.product", "csv.count")
+	err = msgqueue.SetupMQ(connAmpq, excDirectSetupCSVProcessor)
+	if err != nil {
+		log.Printf("msgqueue.SetupMQ: %v", err)
+		panic(err)
+	}
+
 	waitGroup, ctxWg := errgroup.WithContext(ctx)
 
 	newDb := db.NewStoreMain()
@@ -83,8 +90,9 @@ func main() {
 	}
 
 	objectStorage := storage.NewSeaweedS3(newClientS3)
+	newProduct := service.NewProducts(newDb, objectStorage)
 
-	const bucket = "scmt"
+	const bucket = "lukefile"
 	if err := objectStorage.EnsureBucket(ctx, bucket); err != nil {
 		log.Fatal(err)
 	}
@@ -100,6 +108,10 @@ func main() {
 
 	waitGroup.Go(func() error {
 		return msgqueue.ConsumerEmailNotif(ctxWg, connAmpq, excDirectSetupNotifEmail.ExchangeName, excDirectSetupNotifEmail.QueueName, "worker-order-2", newGmailSender)
+	})
+
+	waitGroup.Go(func() error {
+		return msgqueue.ConsumerProductCSV(ctxWg, connAmpq, excDirectSetupCSVProcessor.ExchangeName, excDirectSetupCSVProcessor.QueueName, "worker-order-3", newProduct)
 	})
 
 	waitGroup.Go(func() error {

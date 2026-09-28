@@ -10,7 +10,6 @@ import (
 	v4 "github.com/aws/aws-sdk-go-v2/aws/signer/v4"
 
 	"github.com/aws/aws-sdk-go-v2/service/s3"
-	"github.com/google/uuid"
 )
 
 type SeaweedS3 struct {
@@ -37,18 +36,16 @@ func (s *SeaweedS3) EnsureBucket(ctx context.Context, bucket string) error {
 func (s *SeaweedS3) PresignObject(
 	ctx context.Context,
 	bucketName,
-	subDir,
-	key,
+	key, // atau subDir [warehouse/username/location]
 	contentType,
 	fileName string,
 	optFns ...func(*s3.PresignOptions),
 ) (*v4.PresignedHTTPRequest, string, error) {
 
-	// /subDir/key/filename
+	// key/filename
 	objectKey := fmt.Sprintf(
-		"%s/%s/%s",
-		subDir,
-		uuid.NewString(),
+		"%s/%s",
+		key,
 		fileName,
 	)
 
@@ -76,11 +73,10 @@ func (s *SeaweedS3) PresignObject(
 }
 
 // upload via server
-func (s *SeaweedS3) PutObject(ctx context.Context, bucket, subDir, fileName string, file io.Reader) (*s3.PutObjectOutput, string, error) {
+func (s *SeaweedS3) PutObject(ctx context.Context, bucket, key, fileName string, file io.Reader) (*s3.PutObjectOutput, string, error) {
 	objectKey := fmt.Sprintf(
-		"%s/%s/%s",
-		subDir,
-		uuid.NewString(), // key must be unique
+		"%s/%s",
+		key,
 		fileName,
 	)
 
@@ -97,11 +93,10 @@ func (s *SeaweedS3) PutObject(ctx context.Context, bucket, subDir, fileName stri
 
 }
 
-func (s *SeaweedS3) GetObject(ctx context.Context, bucket, subDir, key, fileName string) (*s3.GetObjectOutput, error) {
+func (s *SeaweedS3) GetObject(ctx context.Context, bucket, key, fileName string) (*s3.GetObjectOutput, error) {
 
 	objectKey := fmt.Sprintf(
-		"%s/%s/%s",
-		subDir,
+		"%s/%s",
 		key,
 		fileName,
 	)
@@ -113,5 +108,20 @@ func (s *SeaweedS3) GetObject(ctx context.Context, bucket, subDir, key, fileName
 			Key:    aws.String(objectKey),
 		},
 	)
+
+}
+
+func (s *SeaweedS3) DeleteObject(ctx context.Context, bucket, key, fileName string) (*s3.DeleteObjectOutput, error) {
+	objectKey := fmt.Sprintf(
+		"%s/%s",
+		key,
+		fileName,
+	)
+	delObj := &s3.DeleteObjectInput{
+		Bucket: aws.String(bucket),
+		Key:    aws.String(objectKey),
+	}
+
+	return s.Client.DeleteObject(ctx, delObj, nil)
 
 }

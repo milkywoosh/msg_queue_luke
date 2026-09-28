@@ -81,3 +81,58 @@ func (s *StoreMain) Fetch(key string) *Node {
 	// }
 	return val1
 }
+
+type NodeProduct struct {
+	ProductCode string
+	Count       int
+}
+
+func (s *StoreMain) SetProduct(key string) error {
+
+	// for loop terus sampe proses Compare and Swap sukses semua
+	// for {
+	n0 := &NodeProduct{
+		ProductCode: key,
+		Count:       1,
+	}
+
+	oldVal, ok := s.mutexMap.Load(key)
+	if !ok {
+		s.mutexMap.Store(key, n0)
+		return nil
+	}
+
+	inferOldVal, ok := oldVal.(*NodeProduct)
+	if !ok {
+		return fmt.Errorf("gagal infer oldVal: %s", key)
+	}
+
+	n := &NodeProduct{
+		ProductCode: key,
+		Count:       inferOldVal.Count + 1,
+	}
+
+	sw := s.mutexMap.CompareAndSwap(key, oldVal, n)
+	if !sw {
+		return fmt.Errorf("gagal swap old and new")
+	}
+
+	// }
+	return nil
+}
+
+func (s *StoreMain) GetProductCount(key string) (*NodeProduct, error) {
+
+	data, ok := s.mutexMap.Load(key)
+	if !ok {
+		return nil, fmt.Errorf("err load key: %s", key)
+	}
+
+	val, ok := data.(*NodeProduct)
+	if !ok {
+		return nil, fmt.Errorf("err infer to *NodeProduct: %s", key)
+	}
+
+	return val, nil
+
+}

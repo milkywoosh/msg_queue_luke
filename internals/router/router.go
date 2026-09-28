@@ -12,7 +12,6 @@ import (
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/service/s3"
-	"github.com/google/uuid"
 	"github.com/julienschmidt/httprouter"
 	"github.com/rabbitmq/amqp091-go"
 	"msgqueue-luke.com/v2/internals/db"
@@ -77,6 +76,9 @@ func NewServer(
 	s.GeneratePresignedURL()
 	s.ProcessStream()
 
+	s.UploadItemProduct()
+	s.ProductCount()
+
 	return s, nil
 }
 
@@ -107,7 +109,7 @@ func (s *Server) AddDataMultipart() {
 
 		dataResp := make(map[string]any)
 		tokenInfo := struct {
-			Bucket, SubDir, Email string
+			Bucket, Key, Email string
 		}{
 			"scmt", "PGC001", "anyemail@mailx.com",
 		}
@@ -542,7 +544,7 @@ func (s *Server) GeneratePresignedURL() {
 
 		ctx := r.Context()
 		tokenInfo := struct {
-			Bucket, SubDir string
+			Bucket, Key string
 		}{
 			"scmt", "PGC001",
 		}
@@ -558,7 +560,7 @@ func (s *Server) GeneratePresignedURL() {
 		}
 
 		// directory where file stored at S3
-		// subdir/key-unique/csvFileName
+		// /key-unique/csvFileName
 
 		var optFns []func(*s3.PresignOptions) = []func(*s3.PresignOptions){
 			s3.WithPresignExpires(10 * time.Minute),
@@ -567,8 +569,7 @@ func (s *Server) GeneratePresignedURL() {
 		preSignedHttp, storageDir, err := s.s3Client.PresignObject(
 			ctx,
 			tokenInfo.Bucket,
-			tokenInfo.SubDir,
-			uuid.NewString(),
+			tokenInfo.Key,
 			reqBody.ContentType,
 			reqBody.CsvFileName,
 			optFns...,
@@ -594,8 +595,7 @@ func (s *Server) GeneratePresignedURL() {
 
 type StreamCSVParams struct {
 	Bucket   string `json:"bucket_name"` // nama skema
-	SubDir   string `json:"sub_dir"`     // location/warehouse/parent
-	Key      string `json:"key"`
+	Key      string `json:"key"`         // location/warehouse/parent
 	FileName string `json:"file_name"`
 }
 
@@ -619,7 +619,6 @@ func (s *Server) ProcessStream() {
 		result, err := s.s3Client.GetObject(
 			ctx,
 			reqBody.Bucket,
-			reqBody.SubDir,
 			reqBody.Key,
 			reqBody.FileName,
 		)
