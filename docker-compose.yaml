@@ -45,7 +45,8 @@ services:
     networks:
       - backend-queue
   s3:
-    image: chrislusf/seaweedfs:latest
+    image: chrislusf/seaweedfs:4.48
+    restart: unless-stopped #makesure always on when docker start
     container_name: s3-trial
     command: server -dir=/data -s3
     ports:

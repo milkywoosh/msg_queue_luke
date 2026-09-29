@@ -44,6 +44,7 @@ cmd: aws --endpoint-url http://localhost:8333 s3 ls s3://uploads<bucker-name>
 cmd: aws --endpoint-url http://localhost:8333 s3 ls s3://uploads --recursive
 
 cmd: aws --endpoint-url http://localhost:8333 s3 ls s3://scmt --recursive
+cmd: aws --endpoint-url http://localhost:8333 s3 ls s3://lukefile --recursive
 
 donwload langsung
 cmd: aws --endpoint-url http://localhost:8333 \
@@ -68,6 +69,12 @@ aws --endpoint-url http://localhost:8333 \
   s3 cp \
   s3://parent-dir/91b049e3-c7eb-4c61-97ad-84c5a1ec1e77/person_100_rows.csv \
   downloaded.csv
+
+aws --endpoint-url http://localhost:8333 \
+  s3 cp \
+  s3://lukefile/PGC001/items_prod_20.csv \
+  downloaded.csv
+
   
 
 go test -v -run ^TestNewSeaweedS3$ ./...
