@@ -1,0 +1,25 @@
+User
+└── lukeaul1
+    ├── UID: 1000
+    │
+    ├── Primary Group
+    │   └── lukeaul1 (GID 1001)
+    │
+    └── Supplementary Groups(part of these grups)
+        ├── sudo   (GID 27)
+        ├── docker (GID 1000)
+        └── lukeapp (GID 1002)
+
+
+ owner | group | others
+d rwx    rwx     rwx
+
+cmd: getent group
+for: tampilin semua grup dan semua membernya
+result: **panjang
+
+
+cmd: getent group docker<nama-grup>
+for: tampilin semua member dari docker
+result: docker:x:1000:root,lukeaul1
+

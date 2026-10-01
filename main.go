@@ -39,6 +39,11 @@ func main() {
 
 	//    conn, err := amqp.Dial("amqp://guest:guest@localhost:5672/")
 	// log.Printf("cfg rabbit mq: %s", cfg.RabbitMQPassword)
+
+	// RABBITMQ_DIAL=amqp://lukerbtmq:lukerbtmq123@localhost:5672/ #untuk running local
+
+	// rbtDial := fmt.Sprintf("amqp://%s:%s@rabbitmq:%s/", cfg.RabbitMQUser, cfg.RabbitMQPassword, "5672")
+	// log.Printf("rabbitmq dial: %s", rbtDial)
 	connAmpq, err := amqp091.Dial(cfg.RabbitMQDial)
 	if err != nil {
 		panic(err)

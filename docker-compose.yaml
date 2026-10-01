@@ -1,3 +1,16 @@
+secrets:
+  postgres_password:
+    file: /opt/luke_msg_queue/secrets/postgres_pw.txt # dari host VPS
+  rabbitmq_dial:
+    file: /opt/luke_msg_queue/secrets/rabbitmq_dial.txt # dari host VPS **note: username di dial dan .conf harus sama
+  rabbitmq_conf:
+    file: /opt/luke_msg_queue/secrets/rabbitmq.conf # utk config server awal
+  s3_access_key:
+    file: /opt/luke_msg_queue/secrets/s3_accesskey.txt
+  s3_secret_key:
+    file: /opt/luke_msg_queue/secrets/s3_secretkey.txt
+  email_sender_password:
+    file: /opt/luke_msg_queue/secrets/email_sender_password.txt
 services:
   app-server:
     build:
@@ -8,9 +21,17 @@ services:
     env_file:
       - ./app.env
     environment:
-      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER} ## nama environment image resmi, harus pake ini
-      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD} ## nama environment image resmi, harus pake ini
-      RABBITMQ_DIAL: ${RABBITMQ_DIAL} ## nama environment image resmi, harus pake ini
+      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
+      RABBITMQ_DIAL_FILE: /run/secrets/rabbitmq_dial
+      S3_ACCESS_KEY_FILE: /run/secrets/s3_access_key
+      S3_SECRET_KEY_FILE: /run/secrets/s3_secret_key
+      EMAIL_SENDER_PASSWORD_FILE: /run/secrets/email_sender_password
+    secrets:
+      - rabbitmq_dial
+      - postgres_password
+      - s3_access_key
+      - s3_secret_key
+      - email_sender_password
     ports:
       - "8005:8005"
     depends_on:
@@ -21,20 +42,23 @@ services:
   rabbitmq:
     image: rabbitmq:4.3.5-management # ubuntu
     container_name: rabbitmq_cont
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER}
+      RABBITMQ_CONFIG_FILE: /run/secrets/rabbitmq_conf
+    secrets:
+      - rabbitmq_dial
+      - rabbitmq_conf
     ports: 
       - "5672:5672" # port untuk service rabbitmq
       - "15672:15672" # port untuk DASHBOARD rabbitmq
     restart: unless-stopped
     env_file:
       - ./app.env ## acuan dari lokas docker-compose
-    environment:
-      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER} ## nama environment image resmi see Docs
-      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD}
-      RABBITMQ_DIAL: ${RABBITMQ_DIAL}
     configs:
       - source: rabbitmq-plugins
         target: /etc/rabbitmq/enabled_plugins
     volumes:
+      # - /opt/luke_msg_queue/secrets/rabbitmq.conf:/etc/rabbitmq/rabbitmq.conf:ro
       - rabbitmq-lib:/var/lib/rabbitmq/
       - rabbitmq-log:/var/log/rabbitmq
     healthcheck:
@@ -49,6 +73,12 @@ services:
     restart: unless-stopped #makesure always on when docker start
     container_name: s3-trial
     command: server -dir=/data -s3
+    environment:
+      S3_ACCESS_KEY_FILE: /run/secrets/s3_access_key
+      S3_SECRET_KEY_FILE: /run/secrets/s3_secret_key
+    secrets:
+      - s3_access_key
+      - s3_secret_key
     ports:
       - "8333:8333"
     volumes:

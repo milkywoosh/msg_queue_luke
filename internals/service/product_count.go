@@ -72,6 +72,8 @@ func (p *Products) GroupingItemByProductCode(bucket, key, fileName string) error
 		log.Printf("colMap: %d. cols: %s", colMap[cols], cols)
 	}
 
+	log.Printf("length rows: %d", len(csvData.Rows))
+
 	for _, val := range csvData.Rows {
 		// qrcodeCol := colMap["qrcode"]
 		ProductCodeCol := colMap["product_code"]
